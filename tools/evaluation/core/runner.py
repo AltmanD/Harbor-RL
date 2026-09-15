@@ -19,8 +19,8 @@ import sys
 import time
 from pathlib import Path
 
-from agentic_rl.harnesses.eval import create_eval_harness
-from agentic_rl.harnesses.eval.base import EvalResult, EvalRunSpec, ServingSpec
+from harborrl.harnesses.eval import create_eval_harness
+from harborrl.harnesses.eval.base import EvalResult, EvalRunSpec, ServingSpec
 
 from . import serving as serving_mod
 

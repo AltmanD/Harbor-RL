@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# CPU-worker pool_server launcher for SetA/agentic_rl.
+# CPU-worker pool_server launcher for SetA/harborrl.
 #
 # Runs in the foreground. Start it inside tmux/screen or redirect it from the
 # caller if you want it detached.
@@ -83,7 +83,7 @@ export WORKER_RESET_STORM_RATIO_PCT="${WORKER_RESET_STORM_RATIO_PCT:-50}"
 export CONTAINER_PIDS_LIMIT="${CONTAINER_PIDS_LIMIT:-64}"
 export CONTAINER_MEMORY_LIMIT="${CONTAINER_MEMORY_LIMIT:-16g}"
 
-# Preflight and Docker cleanup. This worker is assumed dedicated to LightRL
+# Preflight and Docker cleanup. This worker is assumed dedicated to HarborRL
 # experiments, so broad cleanup is allowed to remove stale task containers.
 export PREFLIGHT_KILL_ORPHAN_RUNNING="${PREFLIGHT_KILL_ORPHAN_RUNNING:-1}"
 export SKIP_PREFLIGHT_CLEANUP="${SKIP_PREFLIGHT_CLEANUP:-0}"
@@ -141,7 +141,7 @@ export WORKER_TASK_IMAGE_RETRY_AFTER="${WORKER_TASK_IMAGE_RETRY_AFTER:-300}"
 export CLAWSENTRY_NEEDED="${CLAWSENTRY_NEEDED:-0}"
 
 echo "========================================"
-echo "  LightRL pool_server"
+echo "  HarborRL pool_server"
 echo "  repo:                 ${REPO_ROOT}"
 echo "  python:               $(command -v python || true)"
 echo "  port:                 ${ENV_SERVER_PORT}"

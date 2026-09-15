@@ -12,7 +12,7 @@ services:
     environment:
       - TEST_DIR=${T_BENCH_TEST_DIR}
     labels:
-      agentic_rl.pool-namespace: ${TERMINAL_RL_POOL_NAMESPACE:-default}
+      harborrl.pool-namespace: ${TERMINAL_RL_POOL_NAMESPACE:-default}
     volumes:
       - ${T_BENCH_TASK_LOGS_PATH}:${T_BENCH_CONTAINER_LOGS_PATH}
       - ${T_BENCH_TASK_AGENT_LOGS_PATH}:${T_BENCH_CONTAINER_AGENT_LOGS_PATH}
@@ -20,4 +20,4 @@ services:
 networks:
   default:
     labels:
-      agentic_rl.pool-namespace: ${TERMINAL_RL_POOL_NAMESPACE:-default}
+      harborrl.pool-namespace: ${TERMINAL_RL_POOL_NAMESPACE:-default}

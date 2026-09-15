@@ -14,8 +14,8 @@ REPO_ROOT = Path(__file__).resolve().parents[4]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from agentic_rl.environments.agent_safetybench.runtime import AgentSafetyBenchEnv
-from agentic_rl.environments.agentharm.runtime import AgentHarmEnv
+from harborrl.environments.agent_safetybench.runtime import AgentSafetyBenchEnv
+from harborrl.environments.agentharm.runtime import AgentHarmEnv
 
 
 def _assert(cond: bool, msg: str) -> None:

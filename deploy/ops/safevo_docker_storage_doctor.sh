@@ -95,7 +95,7 @@ docker_info_value() {
 
 print_header() {
     log "========================================"
-    log "LightRL Docker storage doctor"
+    log "HarborRL Docker storage doctor"
     log "host=${HOST_ID}"
     log "repo=${REPO_ROOT}"
     log "mode=${MODE} apply=${APPLY}"

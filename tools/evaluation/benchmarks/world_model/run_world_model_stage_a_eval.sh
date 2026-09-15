@@ -8,7 +8,7 @@ RUNS_ROOT="${RUNS_ROOT:-${REPO_ROOT}/runs}"
 
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 
-export PYTHONPATH="${REPO_ROOT}/slime:${PYTHONPATH:-}"
+export PYTHONPATH="${REPO_ROOT}/backends/slime:${PYTHONPATH:-}"
 
 STAMP="$(date +%Y%m%d_%H%M%S)"
 WM_OUT_DIR="${WM_OUT_DIR:-${RUNS_ROOT}/evaluation/world_model_stage_a_eval/${STAMP}}"

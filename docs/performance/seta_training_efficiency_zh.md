@@ -84,7 +84,7 @@ python slime/tools/trace_timeline_viewer.py \
 Firecracker 预热进程和 snapshot/OverlayBD 路径。可直接复用的原则是“有界资源池 +
 异步维护 + 生命周期可观测”，而不是直接把当前 Docker 环境替换成 Firecracker。
 
-LightRL worker 现已在 `/status` 的 `lifecycle_latency_sec` 中提供最近 512 次（可由
+HarborRL worker 现已在 `/status` 的 `lifecycle_latency_sec` 中提供最近 512 次（可由
 `WORKER_LIFECYCLE_HISTORY_SIZE` 调整）以下阶段的 count、success/failure、mean、
 P50、P95 和 max：
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Summarize SETA rollout/actor timing from a LightRL run directory."""
+"""Summarize SETA rollout/actor timing from a HarborRL run directory."""
 
 from __future__ import annotations
 

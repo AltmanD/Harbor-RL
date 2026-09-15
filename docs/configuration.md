@@ -1,4 +1,4 @@
-# LightRL 配置与运行配方
+# HarborRL 配置与运行配方
 
 训练配置直接写在 `examples/training/` 的 recipe 脚本中。每个脚本包含模型、数据集、
 算法、GPU 拓扑和 rollout 配置，环境变量可覆盖默认值；不再经过 Python CLI、配置组合
@@ -19,7 +19,7 @@ BACKGROUND=1 bash examples/training/train_qwen3_8b_seta_dapo.sh
 
 ```text
 examples/training/<recipe>.sh
-  -> agentic_rl/platform/slime_train.sh
+  -> harborrl/platform/slime_train.sh
   -> slime/train_async.py
 ```
 
@@ -38,8 +38,8 @@ examples/training/<recipe>.sh
 运行时、资源和运维操作分别见
 `deploy/workers/`、`deploy/runtime/` 与 `deploy/ops/`。
 
-Python 侧的环境变量解析统一在 `agentic_rl/env.py`（`env_bool` /
+Python 侧的环境变量解析统一在 `harborrl/env.py`（`env_bool` /
 `env_int` / `env_float` / `env_flag` 等）；该模块的 `ENV_VARS` 表是
 rollout 域变量的集中声明（名称 → 含义），新增变量请在此登记。环境
-（数据源）相关的判定集中在 `agentic_rl/environments/registry.py` 的
+（数据源）相关的判定集中在 `harborrl/environments/registry.py` 的
 `EnvSpec` 表，无需再散落修改 if-else 分支。

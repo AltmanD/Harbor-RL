@@ -59,9 +59,9 @@ else
   CACHE_ARGS+=(--hf-model "${WM_HF_MODEL}" --max-length "${WM_HF_MAX_LENGTH}" --pooling "${WM_HF_POOLING}")
 fi
 
-PYTHONPATH="${REPO_ROOT}/slime:${REPO_ROOT}/agentic_rl" "${PYTHON_BIN}" "${CACHE_ARGS[@]}"
+PYTHONPATH="${REPO_ROOT}/backends/slime:${REPO_ROOT}/harborrl" "${PYTHON_BIN}" "${CACHE_ARGS[@]}"
 
-PYTHONPATH="${REPO_ROOT}/slime:${REPO_ROOT}/agentic_rl" "${PYTHON_BIN}" -m slime.world_model.train_probe \
+PYTHONPATH="${REPO_ROOT}/backends/slime:${REPO_ROOT}/harborrl" "${PYTHON_BIN}" -m slime.world_model.train_probe \
   --input "${WM_OUT_DIR}/cached_hidden.pt" \
   --output "${WM_OUT_DIR}/probe.pt" \
   --latent-dim "${WM_LATENT_DIM}" \
@@ -72,7 +72,7 @@ PYTHONPATH="${REPO_ROOT}/slime:${REPO_ROOT}/agentic_rl" "${PYTHON_BIN}" -m slime
   --action-contrast-coef "${WM_ACTION_CONTRAST_COEF}" \
   --value-coef "${WM_VALUE_COEF}"
 
-PYTHONPATH="${REPO_ROOT}/slime:${REPO_ROOT}/agentic_rl" "${PYTHON_BIN}" -m slime.world_model.rank_candidates \
+PYTHONPATH="${REPO_ROOT}/backends/slime:${REPO_ROOT}/harborrl" "${PYTHON_BIN}" -m slime.world_model.rank_candidates \
   --checkpoint "${WM_OUT_DIR}/probe.pt" \
   --input "${WM_OUT_DIR}/cached_hidden.pt" \
   --output "${WM_OUT_DIR}/rankings.jsonl"

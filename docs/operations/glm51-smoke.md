@@ -1,6 +1,6 @@
 # GLM-5.1 支持说明与使用指南
 
-本文说明 LightRL 如何支持 GLM-5.1(`zai-org/GLM-5.1`,`model_type=glm_moe_dsa`)
+本文说明 HarborRL 如何支持 GLM-5.1(`zai-org/GLM-5.1`,`model_type=glm_moe_dsa`)
 进行 colocate RL 训练，以及如何启动一次 smoke。现场经验、故障史与 TODO 见
 `local/records/operations/rjob/glm51-smoke.md`；逐日状态见
 `local/records/report/glm51_smoke_status_2026-09-07.md`。

@@ -72,7 +72,7 @@ cd "${REPO_ROOT}"
 exec > >(tee -a "${LOG_FILE}") 2>&1
 
 echo "========================================"
-echo "  LightRL docker watchdog"
+echo "  HarborRL docker watchdog"
 echo "  repo:       ${REPO_ROOT}"
 echo "  worker_id:  ${CPU_WORKER_ID}"
 echo "  run_id:     ${OPENCLAW_REMOTE_RUN_ID}"

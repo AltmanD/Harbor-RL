@@ -5,7 +5,7 @@ Date: 2026-09-09 (Asia/Hong_Kong)
 ## Intended configuration
 
 The reproducible online baseline uses the Qwen3-8B SETA-compatible terminal
-environment, DAPO as the on-policy objective, and the LightRL SPEAR adapter:
+environment, DAPO as the on-policy objective, and the HarborRL SPEAR adapter:
 
 | item | value |
 | --- | --- |
@@ -104,7 +104,7 @@ reported. Before retrying, rebuild the converted TB2.1 task images with
 
 ## Measured historical run (reference only)
 
-For continuity, the latest completed LightRL SPEAR-like terminal run is:
+For continuity, the latest completed HarborRL SPEAR-like terminal run is:
 
 ```text
 run:  lightrl-seta-spear-s1234-153614-20260908-153614

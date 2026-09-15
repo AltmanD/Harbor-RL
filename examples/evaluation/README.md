@@ -6,7 +6,7 @@ Ray、Slime 和环境 worker 的重量级配方，使用本目录提供的启动
 本目录是**离线评估的用户入口**:给出典型评测场景的配方(配置 +
 命令)。评测机制本身(适配层、runner、CLI)在
 [`tools/evaluation/`](../../tools/evaluation/README.md),
-harness 适配器在 `agentic_rl/harnesses/eval/`;本目录不放代码,
+harness 适配器在 `harborrl/harnesses/eval/`;本目录不放代码,
 只放"怎么跑"的配方,与 `examples/training/`(训练配方)对称。
 
 三个目录的分工:
@@ -15,7 +15,7 @@ harness 适配器在 `agentic_rl/harnesses/eval/`;本目录不放代码,
 |---|---|
 | `examples/evaluation/`(本目录) | 用户配方:选哪个 harness、配什么参数、跑哪条命令 |
 | `tools/evaluation/` | 通用评估工具集:`eval_cli.py`、core/、configs/、site/ |
-| `agentic_rl/harnesses/eval/` | harness 适配层:terminus-2 / claude-code-cli / camel-agent |
+| `harborrl/harnesses/eval/` | harness 适配层:terminus-2 / claude-code-cli / camel-agent |
 
 ## 配方 1:Terminal-Bench 风格 benchmark(terminus-2)
 
@@ -55,7 +55,7 @@ python3 -m tools.evaluation report \
 产物:`compare.md`(模型 × pass@1 / mean_reward / 异常分布 对比表)+
 `compare.csv`。
 
-## 配方 3:LightRL 自研链路(camel-agent / SETA)
+## 配方 3:HarborRL 自研链路(camel-agent / SETA)
 
 走 slime `eval_only` 重量级运行时(自行拉起推理引擎,`serving` 段不生效):
 

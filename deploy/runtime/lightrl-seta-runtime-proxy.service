@@ -1,5 +1,5 @@
 [Unit]
-Description=Credential-hiding HTTP proxy bridge for LightRL SETA containers
+Description=Credential-hiding HTTP proxy bridge for HarborRL SETA containers
 After=network-online.target docker.service
 Wants=network-online.target
 

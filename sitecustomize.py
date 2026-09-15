@@ -1,4 +1,4 @@
-"""Local Python startup hooks for LightRL runs.
+"""Local Python startup hooks for HarborRL runs.
 
 This file is imported automatically when the repository root is present on
 ``PYTHONPATH``.  It keeps GLM-5.1 smoke jobs working with the pinned

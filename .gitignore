@@ -45,12 +45,12 @@ nohup.out
 /docs/operations/docker_env_*.md
 /examples/validation/internal/
 /examples/validation/*.sh
-/tests/agentic_rl/test_*job*
-/tests/agentic_rl/test_*runtime_proxy*
+/tests/harborrl/test_*job*
+/tests/harborrl/test_*runtime_proxy*
 /tools/infra/*local*worker*state*
 /tools/infra/download_*docker_bundle.py
 /configs/site/local.yaml
-/agentic_rl/worker_urls*.txt
+/harborrl/worker_urls*.txt
 swe.pem
 
 # Generated agentic datasets
@@ -65,9 +65,9 @@ swe.pem
 
 # Local scratch and historical exports
 /docs/records/
-/agentic_rl/archive/
-/agentic_rl/build_outputs/
-/agentic_rl/logs/
+/harborrl/archive/
+/harborrl/build_outputs/
+/harborrl/logs/
 /tmp_doc_*/
 /workspace/
 # Archived deployment source under deploy/archive/ is intentionally tracked.

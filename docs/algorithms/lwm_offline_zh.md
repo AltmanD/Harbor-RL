@@ -1,6 +1,6 @@
 # LWM 离线验证：面向 Agentic RL 的 Latent 世界模型
 
-> **摘要。** 本文描述 LightRL 中 LWM（Latent World Model，潜在世界模型）的
+> **摘要。** 本文描述 HarborRL 中 LWM（Latent World Model，潜在世界模型）的
 > 设计、实现与离线验证。LWM 复用 policy LLM 的 hidden state 作为
 > state/action/feedback 表征，在统一连续 latent 空间中学习“执行动作 $a_t$
 > 后环境返回什么反馈”，训练目标由预测损失、SIGReg 防坍塌正则、
@@ -489,7 +489,7 @@ PYTHONPATH=slime:. python -m slime.world_model.online_learner \
 
 tb2.1 任务若需转换为在线训练运行时的 TB1 风格 env 目录（task.yaml /
 compose / Dockerfile / tests），使用
-`agentic_rl/data/convert_tb21_to_terminal_env.py`。
+`harborrl/data/convert_tb21_to_terminal_env.py`。
 
 ### 4.8 配置参数参考
 
@@ -712,7 +712,7 @@ policy checkpoint 的环境中直接复现。
 | `slime/slime/world_model/mpc.py` / `plan_mpc.py` | 同 state 候选 action 的 latent one-step planning |
 | `slime/slime/world_model/loss_hook.py` | 与 GRPO/DAPO 的显式、default-off 辅助损失契约 |
 | `slime/slime/world_model/metadata.py` | rollout 侧轻量 transition metadata |
-| `agentic_rl/data/convert_tb21_to_terminal_env.py` | tb2.x 任务目录 → 在线训练运行时 TB1 风格 env 布局 |
+| `harborrl/data/convert_tb21_to_terminal_env.py` | tb2.x 任务目录 → 在线训练运行时 TB1 风格 env 布局 |
 | `examples/training/world_model/train_seta_latent.sh` | 指定 SETA 轨迹的一键训练入口 |
 | `examples/training/world_model/run_tb21_lwm_phase.sh` | 三阶段（baseline/replay/value_mpc）可复现入口 |
 | `examples/training/world_model/run_tb21_lwm_stream.sh` | 流式 A/B 入口 |
@@ -904,7 +904,7 @@ state/action hidden 两路回传到 policy backbone。
    `build_terminal_world_model_record`（`metadata.py:133-202`）把每 turn 的
    context/action/`next_observation_text`（= 原始 tool result 拼接，
    `metadata.py:99-130`）写入 `sample.metadata["world_model"]`，挂接点
-   `agentic_rl/rollout/generate_steps.py:1277`。
+   `harborrl/rollout/generate_steps.py:1277`。
 2) 收进 buffer 并落盘（`slime/slime/ray/rollout.py:359-369`）：
    `world_model_records_from_samples`（`replay_buffer.py:164-179`）抽出记录
    → `TrajectoryReplayBuffer.push` → 每个 rollout 存

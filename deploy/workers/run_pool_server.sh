@@ -374,7 +374,7 @@ if [[ "${WORKER_CLEANUP_LEGACY_UNLABELED}" != "0" && "${WORKER_CLEANUP_LEGACY_UN
 fi
 
 task_container_lines() {
-    docker ps --format '{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Label "agentic_rl.pool-namespace"}}' 2>/dev/null \
+    docker ps --format '{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Label "harborrl.pool-namespace"}}' 2>/dev/null \
         | awk -F '\t' -v ns="${TERMINAL_RL_POOL_NAMESPACE}" \
             -v legacy="${WORKER_CLEANUP_LEGACY_UNLABELED}" \
             -v name_re="${TASK_CONTAINER_REGEX}" -v image_re="${TASK_IMAGE_REGEX}" \
@@ -387,7 +387,7 @@ task_container_ids() {
 
 stopped_pool_container_ids() {
     docker ps -a --filter "status=exited" --filter "status=dead" \
-        --format '{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Label "agentic_rl.pool-namespace"}}' 2>/dev/null \
+        --format '{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Label "harborrl.pool-namespace"}}' 2>/dev/null \
         | awk -F '\t' -v ns="${TERMINAL_RL_POOL_NAMESPACE}" \
             -v legacy="${WORKER_CLEANUP_LEGACY_UNLABELED}" \
             -v name_re="${TASK_CONTAINER_REGEX}" -v image_re="${TASK_IMAGE_REGEX}" \
@@ -397,7 +397,7 @@ stopped_pool_container_ids() {
 
 dangling_pool_network_ids() {
     docker network ls --filter "dangling=true" \
-        --format '{{.ID}}\t{{.Label "agentic_rl.pool-namespace"}}\t{{.Label "com.docker.compose.project"}}' 2>/dev/null \
+        --format '{{.ID}}\t{{.Label "harborrl.pool-namespace"}}\t{{.Label "com.docker.compose.project"}}' 2>/dev/null \
         | awk -F '\t' -v ns="${TERMINAL_RL_POOL_NAMESPACE}" \
             -v legacy="${WORKER_CLEANUP_LEGACY_UNLABELED}" \
             -v project_re="${TASK_CONTAINER_REGEX}" \
@@ -872,7 +872,7 @@ if sys.version_info < (3, 12):
 # storage), so this deep import no longer executes them: a partial terminal
 # harness install now surfaces as a clear per-task reset error instead of a
 # pre-uvicorn crash loop, and this check stays fast.
-import agentic_rl.platform.worker_cli  # noqa: F401
+import harborrl.platform.worker_cli  # noqa: F401
 import camel  # noqa: F401
 PY
 }
@@ -932,7 +932,7 @@ start_pool_server_child() {
   # Use stdbuf for line-buffered output (real-time log visibility). Do not use
   # exec here: the launcher owns cleanup traps and must survive the child process.
   stdbuf -oL -eL \
-      "${POOL_SERVER_PYTHON}" -m agentic_rl.platform.worker_cli \
+      "${POOL_SERVER_PYTHON}" -m harborrl.platform.worker_cli \
       --host 0.0.0.0 \
       --port "${ENV_SERVER_PORT}" \
       --max-tasks "${WORKER_MAX_TASKS}" \

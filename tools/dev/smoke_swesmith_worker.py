@@ -20,9 +20,9 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-AGENTIC_RL_DIR = REPO_ROOT / "agentic_rl"
+AGENTIC_RL_DIR = REPO_ROOT / "harborrl"
 sys.path.insert(0, str(REPO_ROOT))
-from agentic_rl.data.convert_swesmith import (  # noqa: E402
+from harborrl.data.convert_swesmith import (  # noqa: E402
     OFFICIAL_TEST_COMMANDS,
     TASK_FORMAT_VERSION,
     expected_swesmith_task_path,

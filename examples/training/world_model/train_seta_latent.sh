@@ -50,7 +50,7 @@ if [[ "${WM_USE_DAPO_REPLAY_BUFFER}" == "1" ]]; then
   args+=(--use-dapo-replay-buffer)
 fi
 
-PYTHONPATH="${REPO_ROOT}/slime:${REPO_ROOT}${PYTHONPATH:+:${PYTHONPATH}}" \
+PYTHONPATH="${REPO_ROOT}/backends/slime:${REPO_ROOT}${PYTHONPATH:+:${PYTHONPATH}}" \
   "${PYTHON_BIN}" -m slime.world_model.train_latent "${args[@]}"
 
 echo "[wm-seta-latent] outputs: ${WM_OUTPUT_DIR}"

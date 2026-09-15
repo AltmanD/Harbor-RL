@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Qwen3-8B + Terminal-Bench 2.1 converted tasks + LightRL SPEAR.
+# Qwen3-8B + Terminal-Bench 2.1 converted tasks + HarborRL SPEAR.
 #
 # TB2.1 is represented by the converted JSONL/task-compose tree used by the
 # existing terminal worker.  Keep DATASET=seta so the shared Slime launcher

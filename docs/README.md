@@ -1,10 +1,10 @@
-# LightRL 文档导航
+# HarborRL 文档导航
 
 ## 架构与配置
 
 - [architecture.md](architecture.md)——包边界、主链路与扩展点（环境注册表、
   env 解析、训练三层入口)。
-- [configuration.md](configuration.md)——recipe 即配置；`agentic_rl/env.py`
+- [configuration.md](configuration.md)——recipe 即配置；`harborrl/env.py`
   的 `ENV_VARS` 声明表；`environments/registry.py` 的 `EnvSpec` 表。
 - [records/refactor/refactor_review_20260731.md](records/refactor/refactor_review_20260731.md)——2026-07-31
   包结构审查记录（分层边界的历史快照）。
@@ -13,7 +13,7 @@
 
 - [algorithms/dive_po_dual_stream.md](algorithms/dive_po_dual_stream.md)——
   DIVE-PO dual-stream advantage 注入的公式与正确性分析；对应实现
-  `agentic_rl/algorithms/dive_po/rewards/dual_stream.py`（生产默认）。
+  `harborrl/algorithms/dive_po/rewards/dual_stream.py`（生产默认）。
 - [algorithms/dive_po_iclr2027_draft.md](algorithms/dive_po_iclr2027_draft.md)——
   DIVE-PO 论文草稿。
 - [algorithms/lwm_offline_zh.md](algorithms/lwm_offline_zh.md)——LWM（Latent

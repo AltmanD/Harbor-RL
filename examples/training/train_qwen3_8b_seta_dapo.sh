@@ -73,12 +73,12 @@ if [[ "${DRY_RUN}" != "1" ]]; then
 fi
 
 printf '[seta-dapo] recipe=%s\n' "${BASH_SOURCE[0]}"
-printf '[seta-dapo] runtime=%s\n' "agentic_rl/platform/slime_train.sh"
+printf '[seta-dapo] runtime=%s\n' "harborrl/platform/slime_train.sh"
 printf '[seta-dapo] final_entry=%s\n' "slime/train_async.py"
 printf '[seta-dapo] run_id=%s worker=%s gpus=%s (%s actor + %s rollout)\n' \
   "${RUN_ID}" "${WORKER_URLS}" "${NUM_GPUS}" "${ACTOR_GPUS}" "${ROLLOUT_GPUS}"
 
-launcher=(bash agentic_rl/platform/slime_train.sh "$@")
+launcher=(bash harborrl/platform/slime_train.sh "$@")
 if [[ "${BACKGROUND}" != "1" ]]; then
   exec "${launcher[@]}"
 fi

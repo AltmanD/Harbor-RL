@@ -13,7 +13,7 @@ python3 -m tools.evaluation --help
 把"起服务 → 生成 harness 配置 → 跑评测 → 回收归一化结果 → 多模型对比"
 这条链路从一次性脚本重构成通用工具。分两层:
 
-- **适配层** `agentic_rl/harnesses/eval/`:每种评测 harness 一个适配器
+- **适配层** `harborrl/harnesses/eval/`:每种评测 harness 一个适配器
   (Harbor `terminus-2`、Harbor `claude-code`、slime `eval_only`/camel-agent),
   负责生成原生配置、给出启动命令、轮询进度、归一化结果。
 - **工具层** `tools/evaluation/`(本目录):YAML 配置、managed SGLang 生命周期、
@@ -111,14 +111,14 @@ errored / top exceptions)到终端,并写 `compare.md` 与 `compare.csv`。
 
 ## 新增一个 harness
 
-1. 在 `agentic_rl/harnesses/eval/` 加一个文件,实现
+1. 在 `harborrl/harnesses/eval/` 加一个文件,实现
    `BaseEvalHarness`(`build_config` / `launch_command` / `progress` /
    `collect`,同步方法即可)。
-2. 在 `agentic_rl/harnesses/eval/__init__.py` 的注册表加一行
+2. 在 `harborrl/harnesses/eval/__init__.py` 的注册表加一行
    (alias → canonical → 模块/类名)。注册表保持惰性 import,
-   不会给 `agentic_rl` 引入重依赖。
+   不会给 `harborrl` 引入重依赖。
 3. 在 `tools/evaluation/configs/` 加一份示例 YAML,在
-   `tests/agentic_rl/test_eval_harnesses.py` 加 build_config/collect 单测。
+   `tests/harborrl/test_eval_harnesses.py` 加 build_config/collect 单测。
 
 ## 配置字段参考
 

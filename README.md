@@ -1,8 +1,8 @@
-# LightRL
+# HarborRL
 
 <div align="center">
 
-<img src="assets/lightrl_logo_cropped.png" alt="LightRL Logo" width="100"/>
+<img src="assets/lightrl_logo_cropped.png" alt="HarborRL Logo" width="100"/>
 
 **A lightweight, efficient, and scalable RL post-training framework for agentic environments.**
 
@@ -17,18 +17,18 @@ English | [简体中文](README_zh.md)
 
 ## Overview
 
-LightRL is an RL post-training framework for training language-model agents in
+HarborRL is an RL post-training framework for training language-model agents in
 interactive environments. Each experiment is composed explicitly along four
 axes, making recipes easy to inspect, reproduce, and extend:
 
 | Axis | Current options | Entry point |
 | --- | --- | --- |
-| Harness | Training: Camel-Agent, Claude Code CLI; evaluation also supports Terminus-2 | `agentic_rl/harnesses/`, `agentic_rl/harnesses/eval/` |
-| Environment | SETA, Agent-SafetyBench, AgentHarm, Tau2; SWE-smith / SWE-Verified conversion tools | `agentic_rl/environments/`, `agentic_rl/data/` |
+| Harness | Training: Camel-Agent, Claude Code CLI; evaluation also supports Terminus-2 | `harborrl/harnesses/`, `harborrl/harnesses/eval/` |
+| Environment | SETA, Agent-SafetyBench, AgentHarm, Tau2; SWE-smith / SWE-Verified conversion tools | `harborrl/environments/`, `harborrl/data/` |
 | Model | Recipe-defined (maintained recipes currently cover Qwen3-8B and GLM-5.1) | `configs/rollout/` |
-| Algorithm | GRPO / DAPO, DIVE-PO | Slime backend and `agentic_rl/algorithms/` |
+| Algorithm | GRPO / DAPO, DIVE-PO | Slime backend and `harborrl/algorithms/` |
 
-LightRL bundles the Slime and Megatron-LM training backends. Terminal
+HarborRL bundles the Slime and Megatron-LM training backends. Terminal
 environments run in isolated Docker workers and are accessed by training
 processes over HTTP. A worker may run on a dedicated CPU/Docker host or on the
 same host as GPU training; colocated deployments must reserve sufficient CPU,
@@ -58,8 +58,8 @@ memory, Docker-network, and port capacity.
   by dataset conversion and terminal-worker tooling. Terminal tasks run in
   isolated Docker workers.
 - **Explicit algorithm boundaries** — GRPO / DAPO come from the bundled Slime
-  backend; LightRL maintains DIVE-PO and the PRM reward agent under
-  `agentic_rl/algorithms/`.
+  backend; HarborRL maintains DIVE-PO and the PRM reward agent under
+  `harborrl/algorithms/`.
 - **Low-cost extension** — environments, harnesses, and reward post-processors
   have centralized registration points instead of scattered conditionals.
 - **Operational observability** — turn-level trajectories, JSONL metrics, W&B
@@ -89,10 +89,10 @@ explicit `START_ENV_POOL_SERVER=1`, enable the local lease router.
 
 ```text
 examples/training/<recipe>.sh
-  → agentic_rl/platform/slime_train.sh          # stable public launcher
+  → harborrl/platform/slime_train.sh          # stable public launcher
       ├─ slime_train/lib_*.sh                    # 7 phases: dirs, config, data, worker, args, launch
-      └─ slime/train_async.py                    # GRPO / DAPO backend
-          → agentic_rl/rollout/entrypoint.generate
+      └─ backends/slime/train_async.py                    # GRPO / DAPO backend
+          → harborrl/rollout/entrypoint.generate
               ├─ environments/registry.py       # source, runtime, and reward policy registry
               ├─ harnesses/factory.py           # Camel-Agent / Claude Code factory
               ├─ rollout/backends/sglang.py     # shared sglang turn client
@@ -110,8 +110,8 @@ from third-party backend details.
 ### Repository layout
 
 ```text
-LightRL/
-├── agentic_rl/
+HarborRL/
+├── harborrl/
 │   ├── algorithms/
 │   │   ├── dive_po/         # DIVE-PO exploration, rewards, and defaults
 │   │   └── prm/             # PRM (process reward) agent
@@ -138,8 +138,8 @@ LightRL/
 ├── tools/                   # analysis, evaluation, and developer diagnostics
 │   └── evaluation/          # reusable orchestration and benchmark entry points
 ├── tests/                   # pytest unit and integration tests
-├── slime/                   # bundled third-party rollout/training backend
-├── Megatron-LM/             # bundled third-party model-training backend
+├── backends/slime/                   # bundled third-party rollout/training backend
+├── backends/Megatron-LM/             # bundled third-party model-training backend
 ├── runs/                    # git-ignored configs, logs, metrics, trajectories
 └── docs/                    # architecture, algorithms, config, evaluation, operations
 ```
@@ -164,7 +164,7 @@ Install the Python package from source:
 
 ```bash
 python3 -m pip install -e '.[rollout,worker,train]'
-python3 -c 'import agentic_rl'
+python3 -c 'import harborrl'
 ```
 
 This installs the Python package and selected optional dependencies only. It
@@ -212,7 +212,7 @@ CONFIRM_LOCAL_CLEANUP=1 \
 The recipe requires 4 GPUs, a reachable `WORKER_URLS`, a Qwen3-8B checkpoint,
 and the project runtime dependencies (at minimum PyYAML, Ray, CUDA/sglang). It
 checks the SETA worker `/healthz` endpoint before launching
-`slime/eval_only.py`. Site-specific RJob/DinD submitters remain under the
+`backends/slime/eval_only.py`. Site-specific RJob/DinD submitters remain under the
 git-ignored `local/rjob/` directory and are intentionally not part of public
 recipes.
 
@@ -255,8 +255,8 @@ valid `HF_CKPT`, `REF_LOAD`, and compatible `MODEL_ARGS_FILE` values. See
 ### 4. Run source-level checks
 
 ```bash
-python3 -m compileall -q agentic_rl
-python3 -m pytest tests/agentic_rl -q
+python3 -m compileall -q harborrl
+python3 -m pytest tests/harborrl -q
 WORKER_URLS=http://127.0.0.1:18081 \
   bash examples/training/train_qwen3_8b_seta_dapo.sh --dry-run
 ```
@@ -270,9 +270,9 @@ git-ignored `local/rjob/` directory, keeping public recipes portable.
 ### Training configuration
 
 Training defaults are defined in the recipe scripts. Environment-variable
-parsing is centralized in `agentic_rl/env.py`; the `ENV_VARS` table
+parsing is centralized in `harborrl/env.py`; the `ENV_VARS` table
 documents the rollout-side variables. Environment and data-source capabilities
-are declared in the `EnvSpec` table in `agentic_rl/environments/registry.py`,
+are declared in the `EnvSpec` table in `harborrl/environments/registry.py`,
 while rollout model templates live in `configs/rollout/`. Environment variables
 override recipe defaults; see [configuration](docs/configuration.md) for fields,
 precedence, and examples.
@@ -322,15 +322,15 @@ Common source-level checks:
 
 ```bash
 python3 -m pytest tests/ -q
-python3 -m compileall -q agentic_rl
+python3 -m compileall -q harborrl
 ```
 
 - **Environment** — register an `EnvSpec` in
-  `agentic_rl/environments/registry.py` and implement the
+  `harborrl/environments/registry.py` and implement the
   `environments/protocol.py:EnvClient` contract. Runtime selection, scoring,
   safety rewards, and trajectory aliases are centralized in the registry.
 - **Harness** — add `_HARNESS_ALIASES` / `_HARNESS_TARGETS` entries in
-  `agentic_rl/harnesses/factory.py` and implement the
+  `harborrl/harnesses/factory.py` and implement the
   `rollout/runner.py:RolloutAgent` protocol. Lazy imports isolate optional
   dependencies.
 - **Reward post-processing** — expose `post_process_rewards(args, samples)`
@@ -354,18 +354,18 @@ python3 -m compileall -q agentic_rl
 
 ## Acknowledgements
 
-LightRL bundles [Slime](https://github.com/THUDM/slime) for rollout/training
+HarborRL bundles [Slime](https://github.com/THUDM/slime) for rollout/training
 runtime and [Megatron-LM](https://github.com/NVIDIA/Megatron-LM) for model
 training. The agentic RL stack was originally developed in **OpenClaw-RL** and
 later extracted and refactored into this framework.
 
 ## Citation
 
-If LightRL helps your research, please cite:
+If HarborRL helps your research, please cite:
 
 ```bibtex
 @misc{lightrl,
-  title={LightRL: A Lightweight, Efficient, Scalable RL Post-training Framework for Agentic Environments},
+  title={HarborRL: A Lightweight, Efficient, Scalable RL Post-training Framework for Agentic Environments},
   author={Pu, Yuan and Zhang, Shaoang and Zhang, Chenhao and Li, Xueyan and Lu, Yudong and Tang, Jia and Wang, Guanchu and Niu, Yazhe},
   publisher={GitHub},
   howpublished={\url{https://github.com/opendilab/LightRL}},

@@ -80,7 +80,7 @@ mkdir -p "${WM_OUTPUT_DIR}/logs"
 printf '[lwm-stream] arms=%s chunks=%s input=%s supplement=%s output=%s encoder=%s seed=%s\n' \
   "${WM_STREAM_ARMS}" "${WM_STREAM_CHUNKS}" "${WM_INPUT}" "${WM_SUPPLEMENT_INPUT}" "${WM_OUTPUT_DIR}" "${WM_ENCODER}" "${WM_SEED}" \
   | tee "${WM_OUTPUT_DIR}/logs/phase.log"
-PYTHONPATH="${REPO_ROOT}/slime:${REPO_ROOT}${PYTHONPATH:+:${PYTHONPATH}}" \
+PYTHONPATH="${REPO_ROOT}/backends/slime:${REPO_ROOT}${PYTHONPATH:+:${PYTHONPATH}}" \
   "${PYTHON_BIN}" -m slime.world_model.stream_latent "${args[@]}" \
   2>&1 | tee -a "${WM_OUTPUT_DIR}/logs/phase.log"
 echo "[lwm-stream] completed: ${WM_OUTPUT_DIR}"

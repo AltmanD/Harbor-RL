@@ -1,10 +1,10 @@
-# LightRL 框架架构与训练数据流
+# HarborRL 框架架构与训练数据流
 
-本文面向需要阅读、运行或扩展 LightRL 的用户，说明仓库目录职责、核心模块边界，以及 SETA + Qwen3-8B + DAPO 训练配方的完整调用链。
+本文面向需要阅读、运行或扩展 HarborRL 的用户，说明仓库目录职责、核心模块边界，以及 SETA + Qwen3-8B + DAPO 训练配方的完整调用链。
 
 ## 1. 一句话理解
 
-LightRL 将“模型训练”和“智能体环境交互”连接起来：Slime/Megatron 负责模型更新，`agentic_rl` 负责数据集、环境、工具调用、奖励和 rollout，Docker worker 负责实际运行终端任务。
+HarborRL 将“模型训练”和“智能体环境交互”连接起来：Slime/Megatron 负责模型更新，`harborrl` 负责数据集、环境、工具调用、奖励和 rollout，Docker worker 负责实际运行终端任务。
 
 ```text
 数据集任务
@@ -29,7 +29,7 @@ Slime/Megatron 执行 DAPO/GRPO 更新
 ```text
 examples/training/       可执行训练配方
 configs/rollout/         rollout 模型与交互配置模板
-agentic_rl/              LightRL 自有逻辑
+harborrl/              HarborRL 自有逻辑
 slime/                   Slime 训练后端
 Megatron-LM/             Megatron 模型训练后端
 deploy/workers/          worker 运行时、pool server 与 watchdog
@@ -49,11 +49,11 @@ runs/                    运行日志、轨迹和分析结果（training/evaluat
 
 ```text
 examples/training/<recipe>.sh
-  → agentic_rl/platform/slime_train.sh
+  → harborrl/platform/slime_train.sh
   → slime/train_async.py
 ```
 
-## 3. `agentic_rl` 目录职责
+## 3. `harborrl` 目录职责
 
 ### 分层与依赖方向
 
@@ -112,7 +112,7 @@ worker 代码：
 - `prm/`：过程奖励模型支持。
   - `agent.py`：调用 PRM 对中间 turn 进行评分。
 
-GRPO/DAPO 的核心优化器由 Slime 提供；LightRL 主要负责其环境交互、样本构造和额外奖励接入。
+GRPO/DAPO 的核心优化器由 Slime 提供；HarborRL 主要负责其环境交互、样本构造和额外奖励接入。
 
 ### `data/`：数据准备
 
@@ -215,7 +215,7 @@ bash examples/training/train_qwen3_8b_seta_dapo.sh
 训练脚本设置模型、数据集、算法、GPU 拆分、run ID 和配置路径，然后执行：
 
 ```bash
-bash agentic_rl/platform/slime_train.sh
+bash harborrl/platform/slime_train.sh
 ```
 
 ### 5.2 编排层
@@ -253,9 +253,9 @@ python3 -u slime/eval_only.py ...
 关键自定义入口为：
 
 ```text
-agentic_rl.rollout.entrypoint.generate
-agentic_rl.misc.rollout_log.rollout_log
-agentic_rl.misc.rollout_log.eval_rollout_log
+harborrl.rollout.entrypoint.generate
+harborrl.misc.rollout_log.rollout_log
+harborrl.misc.rollout_log.eval_rollout_log
 ```
 
 前者负责生成训练样本，后两者负责训练和评测指标。
@@ -303,7 +303,7 @@ GPU 训练主机                         CPU/Docker worker
 Ray                                  pool_server
 Megatron actor                       Docker daemon
 SGLang rollout engine                Compose task containers
-agentic_rl.generate                  reset / exec / close
+harborrl.generate                  reset / exec / close
 DAPO optimizer
 ```
 

@@ -41,18 +41,18 @@ def default_run_dir(category: str, run_id: str) -> Path:
     ``RUNS_ROOT`` lets cluster jobs keep the same layout on shared storage;
     otherwise the repository's ``runs/`` directory is used.
     """
-    from agentic_rl.platform.paths import resolve_run_dir
+    from harborrl.platform.paths import resolve_run_dir
 
     runs_root = os.getenv("RUNS_ROOT", str(_REPO_ROOT / "runs"))
     return resolve_run_dir(run_id, runs_root, category=category)
 
 
 def ensure_repo_on_path() -> None:
-    """Make ``agentic_rl`` importable when running as a loose script."""
+    """Make ``harborrl`` importable when running as a loose script."""
     import sys
 
     try:
-        import agentic_rl  # noqa: F401
+        import harborrl  # noqa: F401
         return
     except ImportError:
         pass
@@ -109,7 +109,7 @@ def deep_merge(base: dict, override: dict) -> dict:
 def build_specs(config: dict) -> tuple[Any, Any]:
     """Turn a loaded config dict into ``(EvalRunSpec, ServingSpec)``."""
     ensure_repo_on_path()
-    from agentic_rl.harnesses.eval.base import EvalRunSpec, ServingSpec
+    from harborrl.harnesses.eval.base import EvalRunSpec, ServingSpec
 
     serving_cfg = dict(config.get("serving") or {})
     serving = ServingSpec(

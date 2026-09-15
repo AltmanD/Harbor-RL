@@ -7,7 +7,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 REPO_ROOT="$(cd -- "${SCRIPT_DIR}/../.." &>/dev/null && pwd)"
-TERMINAL_RL_DIR="${REPO_ROOT}/agentic_rl"
+TERMINAL_RL_DIR="${REPO_ROOT}/harborrl"
 
 export DATASET_DIR="${DATASET_DIR:-${REPO_ROOT}/benchmarks/environments}"
 export ENV_SERVER_PORT="${ENV_SERVER_PORT:-18083}"
@@ -69,7 +69,7 @@ if [[ -z "${POOL_SERVER_PYTHON}" ]]; then
        timeout 60 env \
          "PYTHONPATH=${TERMINAL_RL_DIR}/..${PYTHONPATH:+:${PYTHONPATH}}" \
          "${candidate}" -c \
-         'import importlib; module = importlib.import_module("agentic_rl.platform.worker_app"); assert module.app is not None' \
+         'import importlib; module = importlib.import_module("harborrl.platform.worker_app"); assert module.app is not None' \
          >/dev/null 2>&1; then
       POOL_SERVER_PYTHON="${candidate}"
       break
@@ -83,7 +83,7 @@ fi
 if ! timeout 60 env \
   "PYTHONPATH=${TERMINAL_RL_DIR}/..${PYTHONPATH:+:${PYTHONPATH}}" \
   "${POOL_SERVER_PYTHON}" -c \
-  'import importlib; module = importlib.import_module("agentic_rl.platform.worker_app"); assert module.app is not None'; then
+  'import importlib; module = importlib.import_module("harborrl.platform.worker_app"); assert module.app is not None'; then
   echo "[ERROR] pool_server Python dependency preflight failed for ${POOL_SERVER_PYTHON}." >&2
   echo "        Install deploy/runtime/requirements-swesmith-worker.txt in that environment." >&2
   exit 2
@@ -183,7 +183,7 @@ from pathlib import Path
 prompt_path = Path(sys.argv[1])
 env_dir = Path(sys.argv[2])
 sys.path.insert(0, sys.argv[3])
-from agentic_rl.data.convert_sweverified import (
+from harborrl.data.convert_sweverified import (
     DATASET_NAME,
     DATASET_REVISION,
     OFFICIAL_INSTANCE_COUNT,

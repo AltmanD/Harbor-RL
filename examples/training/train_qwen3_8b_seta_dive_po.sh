@@ -50,9 +50,9 @@ export EXPLORE_TRUNCATION_PENALTY="${EXPLORE_TRUNCATION_PENALTY:--0.01}"
 export EXPLORE_TRUNCATION_PENALTY_OUTCOME_AWARE="${EXPLORE_TRUNCATION_PENALTY_OUTCOME_AWARE:-1}"
 export DIVE_PO_CENTERED_GATE_ENABLED="${DIVE_PO_CENTERED_GATE_ENABLED:-1}"
 export DIVE_PO_GATE_QUALITY_BLEND="${DIVE_PO_GATE_QUALITY_BLEND:-1.0}"
-export CUSTOM_REWARD_POST_PROCESS_PATH="${CUSTOM_REWARD_POST_PROCESS_PATH:-agentic_rl.algorithms.dive_po.rewards.dual_stream.post_process_rewards}"
+export CUSTOM_REWARD_POST_PROCESS_PATH="${CUSTOM_REWARD_POST_PROCESS_PATH:-harborrl.algorithms.dive_po.rewards.dual_stream.post_process_rewards}"
 
-# shellcheck source=../../../agentic_rl/algorithms/dive_po/defaults.sh
-source "${REPO_ROOT}/agentic_rl/algorithms/dive_po/defaults.sh"
+# shellcheck source=../../../harborrl/algorithms/dive_po/defaults.sh
+source "${REPO_ROOT}/harborrl/algorithms/dive_po/defaults.sh"
 [[ "${1:-}" == "--dry-run" ]] && export DRY_RUN=1 && shift
-exec bash agentic_rl/platform/slime_train.sh "$@"
+exec bash harborrl/platform/slime_train.sh "$@"

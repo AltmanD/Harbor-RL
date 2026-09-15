@@ -121,7 +121,7 @@ case "${DEBUG_ROLLOUT_DATA_SCOPE}" in
   eval|train|both) ;;
   *) echo "[math-dapo] invalid DEBUG_ROLLOUT_DATA_SCOPE=${DEBUG_ROLLOUT_DATA_SCOPE} (expected eval, train, or both)" >&2; exit 2 ;;
 esac
-SLIME_DIR="${SLIME_DIR:-${REPO_ROOT}/slime}"
+SLIME_DIR="${SLIME_DIR:-${REPO_ROOT}/backends/slime}"
 TRAIN_PYTHON="${TRAIN_PYTHON:-python3}"
 RUN_ID="${RUN_ID:-math-dapo-${TRAIN_DATASET}-seed${SEED}-$(date +%Y%m%d-%H%M%S)}"
 RUN_DIR="${RUN_DIR:-${REPO_ROOT}/runs/training/${RUN_ID}}"

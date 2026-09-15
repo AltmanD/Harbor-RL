@@ -2,7 +2,7 @@
 # Prepare a repo-local ShieldAgent model directory for official ASB scoring.
 #
 # The scoring scripts prefer:
-#   <LightRL>/runs/models/ShieldAgent
+#   <HarborRL>/runs/models/ShieldAgent
 #
 # Run this once before official ASB scoring, on a machine that can access the
 # source model path. Training/eval clusters are expected to use the repo-local

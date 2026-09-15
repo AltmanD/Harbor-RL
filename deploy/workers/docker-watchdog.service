@@ -1,5 +1,5 @@
 [Unit]
-Description=Docker Watchdog for LightRL pool_server (long-run hardened)
+Description=Docker Watchdog for HarborRL pool_server (long-run hardened)
 Documentation=file:///mnt/shared-storage-user/puyuan/code/LightRL/deploy/workers/start_watchdog.sh
 After=docker.service network-online.target
 Wants=docker.service

@@ -28,9 +28,9 @@ operator-side pu-dev helpers, not deployment payloads.
 | Script / file | Role |
 |---|---|
 | `run_pool_server.sh` | Hardened pool server launcher. Optionally sources the build-proxy env, sanity-checks dockerd, configures capacity, starts uvicorn. Credential-isolated runtime-proxy deployments must set `SKIP_PROXY_ENV=1`. Pass `--restart` to replace the local server in one command (stops the listener on `ENV_SERVER_PORT`, default 18082 in that mode). |
-| `agentic_rl/platform/worker_app.py` | FastAPI service exposed on port 18081 |
-| `agentic_rl/environments/terminal/runtime.py` | Environment client used by pool server |
-| `agentic_rl/environments/terminal/docker_compose.py` | Helper to build / up / down compose stacks |
+| `harborrl/platform/worker_app.py` | FastAPI service exposed on port 18081 |
+| `harborrl/environments/terminal/runtime.py` | Environment client used by pool server |
+| `harborrl/environments/terminal/docker_compose.py` | Helper to build / up / down compose stacks |
 
 ### Manual ops
 
@@ -70,7 +70,7 @@ one per line or comma-separated.
 
 ---
 
-## Optional environment variables (read by `agentic_rl/platform/worker_app.py`)
+## Optional environment variables (read by `harborrl/platform/worker_app.py`)
 
 | Variable | Default | Description |
 |---|---|---|

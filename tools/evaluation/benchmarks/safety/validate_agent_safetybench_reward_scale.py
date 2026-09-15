@@ -7,8 +7,8 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
-AGENTIC_RL_DIR = REPO_ROOT / "agentic_rl"
-for path in (REPO_ROOT, REPO_ROOT / "slime"):
+AGENTIC_RL_DIR = REPO_ROOT / "harborrl"
+for path in (REPO_ROOT, REPO_ROOT / "backends" / "slime"):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
@@ -60,38 +60,38 @@ def _install_import_stubs() -> None:
     sys.modules.setdefault("slime.utils.types", slime_utils_types)
 
     agent = types.ModuleType("agent")
-    prm_agent = types.ModuleType("agentic_rl.harnesses.prm.agent")
+    prm_agent = types.ModuleType("harborrl.harnesses.prm.agent")
     prm_agent.TerminalPRMAgent = object
     sys.modules.setdefault("agent", agent)
-    sys.modules.setdefault("agentic_rl.harnesses.prm.agent", prm_agent)
+    sys.modules.setdefault("harborrl.harnesses.prm.agent", prm_agent)
 
     for name in (
-        "agentic_rl.rollout.backends.sglang",
-        "agentic_rl.rollout.runner",
-        "agentic_rl.environments.client",
+        "harborrl.rollout.backends.sglang",
+        "harborrl.rollout.runner",
+        "harborrl.environments.client",
     ):
         module = types.ModuleType(name)
-        if name == "agentic_rl.rollout.backends.sglang":
+        if name == "harborrl.rollout.backends.sglang":
             module.SGLangTurnClient = object
-        elif name == "agentic_rl.rollout.runner":
+        elif name == "harborrl.rollout.runner":
             module.create_agent_runner = lambda **_kwargs: None
             module.normalize_harness_option = lambda value: value
-        elif name == "agentic_rl.environments.client":
+        elif name == "harborrl.environments.client":
             module.TerminalEnvClient = object
         sys.modules.setdefault(name, module)
 
-    safety_reward = types.ModuleType("agentic_rl.misc.reward_safety")
+    safety_reward = types.ModuleType("harborrl.misc.reward_safety")
     safety_reward.DEFAULT_ZERO_THRESHOLD = 0.0
     safety_reward.broadcast_to_turns = lambda *_args, **_kwargs: {}
     safety_reward.per_turn_score = lambda *_args, **_kwargs: 0.0
     safety_reward.trajectory_score = lambda *_args, **_kwargs: 0.0
-    sys.modules.setdefault("agentic_rl.misc.reward_safety", safety_reward)
+    sys.modules.setdefault("harborrl.misc.reward_safety", safety_reward)
 
 
 _install_import_stubs()
 
-from agentic_rl.types import Interaction  # noqa: E402
-from agentic_rl.rollout.entrypoint import _build_samples  # noqa: E402
+from harborrl.types import Interaction  # noqa: E402
+from harborrl.rollout.entrypoint import _build_samples  # noqa: E402
 from slime.utils.types import Sample  # noqa: E402
 
 

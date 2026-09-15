@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# LightRL wrapper for the official SPEAR ALFWorld recipe.  The command below
+# HarborRL wrapper for the official SPEAR ALFWorld recipe.  The command below
 # mirrors archive/SPEAR and parameterizes paths/resources needed by RJob.
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 OFFICIAL_ROOT="${SPEAR_VERL_AGENT_ROOT:-/mnt/shared-storage-user/puyuan/code/archive/SPEAR/verl-agent}"

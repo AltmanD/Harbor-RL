@@ -3,7 +3,7 @@
 更新时间：2026-07-16
 
 > 实现位置（2026-08-07 起）：本文所述修正版即生产默认实现，见
-> `agentic_rl/algorithms/dive_po/rewards/dual_stream.py`（旧名
+> `harborrl/algorithms/dive_po/rewards/dual_stream.py`（旧名
 > `centered_gate.py`），由 `slime_train.sh` 的默认
 > `--custom-reward-post-process-path` 接入；`DIVE_PO_CENTERED_GATE_ENABLED=0`
 > 可回退到 `rewards/postprocess.py` 的基础实现。

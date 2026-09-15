@@ -6,7 +6,7 @@ environments rather than rows in a dataset, so that name would incorrectly
 produce a `datasets/environments/` hierarchy.
 
 This directory stores assets, not Python implementations. Runtime code lives in
-`agentic_rl/environments/`, data preparation in `agentic_rl/data/`, and scoring
+`harborrl/environments/`, data preparation in `harborrl/data/`, and scoring
 or result export in `tools/evaluation/`.
 
 ```text

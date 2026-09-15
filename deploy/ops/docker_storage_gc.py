@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Docker data-root garbage collector for LightRL CPU workers.
+"""Docker data-root garbage collector for HarborRL CPU workers.
 
 The script is intentionally Docker-CLI based so it can run on the CPU servers
 without the Docker Python SDK. It performs progressive cleanup. Old tagged

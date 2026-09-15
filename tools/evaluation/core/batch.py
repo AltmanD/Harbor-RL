@@ -27,7 +27,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from agentic_rl.harnesses.eval.base import EvalResult
+from harborrl.harnesses.eval.base import EvalResult
 
 from .config import build_specs, default_run_dir, deep_merge
 from .runner import run_eval

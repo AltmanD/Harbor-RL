@@ -1,4 +1,4 @@
-# LightRL 用户工作流
+# HarborRL 用户工作流
 
 `examples/` 是仓库的公开训练与评估入口；`tools/` 只保存分析、评测和
 开发诊断等辅助工具的实现。
@@ -20,7 +20,7 @@ examples/
 
 离线评估(对任意 ckpt 跑 benchmark、批量对比多个 ckpt)的用户配方见
 [evaluation/README.md](evaluation/README.md);评估机制(CLI、配置、
-harness 适配器)由 `tools/evaluation/` 与 `agentic_rl/harnesses/eval/`
+harness 适配器)由 `tools/evaluation/` 与 `harborrl/harnesses/eval/`
 提供。
 
 ## 训练入口

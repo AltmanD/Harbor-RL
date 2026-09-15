@@ -1,1 +1,1 @@
-"""Developer and evaluation utilities shipped with the LightRL repository."""
+"""Developer and evaluation utilities shipped with the HarborRL repository."""

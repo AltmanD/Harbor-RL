@@ -53,7 +53,7 @@ def _run_sweverified(args: argparse.Namespace) -> int:
 
     repo_root = Path(__file__).resolve().parents[2]
     sys.path.insert(0, str(repo_root))
-    from agentic_rl.data.convert_sweverified import (
+    from harborrl.data.convert_sweverified import (
         DATASET_NAME,
         DATASET_REVISION,
         SWEBENCH_COMMIT,

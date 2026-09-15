@@ -15,4 +15,4 @@ export MIX_SAFETY_RATIO="${MIX_SAFETY_RATIO:-2}"
 export MIX_AGENTHARM_RATIO="${MIX_AGENTHARM_RATIO:-2}"
 export EXPLORATION_PROFILE="${EXPLORATION_PROFILE:-off}"
 [[ "${1:-}" == "--dry-run" ]] && export DRY_RUN=1 && shift
-exec bash agentic_rl/platform/slime_train.sh "$@"
+exec bash harborrl/platform/slime_train.sh "$@"

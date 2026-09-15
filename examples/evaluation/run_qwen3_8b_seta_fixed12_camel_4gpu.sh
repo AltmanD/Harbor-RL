@@ -103,8 +103,8 @@ export MODEL_TAG="${MODEL_TAG:-qwen3-8b}"
 export MODEL_ARGS_FILE="${MODEL_ARGS_FILE:-qwen3-8B}"
 export HF_CKPT="${HF_CKPT:-/mnt/shared-storage-user/puyuan/code/slime/Qwen3-8B}"
 export REF_LOAD="${REF_LOAD:-/mnt/shared-storage-user/puyuan/code/slime/Qwen3-8B_torch_dist}"
-export SLIME_DIR="${SLIME_DIR:-${REPO_ROOT}/slime}"
-export SLIME_ENTRYPOINT="${SLIME_ENTRYPOINT:-${REPO_ROOT}/slime/eval_only.py}"
+export SLIME_DIR="${SLIME_DIR:-${REPO_ROOT}/backends/slime}"
+export SLIME_ENTRYPOINT="${SLIME_ENTRYPOINT:-${REPO_ROOT}/backends/slime/eval_only.py}"
 export CUSTOM_CONFIG_PATH="${CUSTOM_CONFIG_PATH:-${REPO_ROOT}/configs/rollout/rollout_qwen3_think.yaml}"
 export EVAL_CONFIG="${EVAL_CONFIG:-${REPO_ROOT}/configs/evaluation/seta_fixed12_score_v1.yaml}"
 
@@ -187,7 +187,7 @@ if [[ -n "${LIGHTRFT_PY312_BIN:-}" && -x "${LIGHTRFT_PY312_BIN}/python3" ]]; the
   launcher_python="${LIGHTRFT_PY312_BIN}/python3"
 fi
 "${launcher_python}" -c 'import yaml' >/dev/null 2>&1 || die \
-  "PyYAML is required by the Slime launcher; activate the LightRL runtime or install PyYAML before running"
+  "PyYAML is required by the Slime launcher; activate the HarborRL runtime or install PyYAML before running"
 
 if [[ "${DRY_RUN}" != "1" ]]; then
   [[ "${NUM_GPUS}" -eq 4 && "${ACTOR_GPUS}" -eq 2 && "${ROLLOUT_GPUS}" -eq 2 && "${TP_SIZE}" -eq 2 ]] \

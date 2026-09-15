@@ -64,4 +64,4 @@ _joined="${EXTRA_ALGO_ARGS:-}"
 for _arg in "${_spear_args[@]}"; do _joined+=" ${_arg}"; done
 export EXTRA_ALGO_ARGS="${_joined}"
 
-exec bash agentic_rl/platform/slime_train.sh "$@"
+exec bash harborrl/platform/slime_train.sh "$@"

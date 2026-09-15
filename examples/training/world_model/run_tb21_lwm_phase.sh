@@ -77,12 +77,12 @@ mkdir -p "${WM_OUTPUT_DIR}/logs"
 printf '[lwm] phase=%s input=%s supplement=%s output=%s encoder=%s seed=%s\n' \
   "${PHASE}" "${WM_INPUT}" "${WM_SUPPLEMENT_INPUT}" "${WM_OUTPUT_DIR}" "${WM_ENCODER}" "${WM_SEED}" \
   | tee "${WM_OUTPUT_DIR}/logs/phase.log"
-PYTHONPATH="${REPO_ROOT}/slime:${REPO_ROOT}${PYTHONPATH:+:${PYTHONPATH}}" \
+PYTHONPATH="${REPO_ROOT}/backends/slime:${REPO_ROOT}${PYTHONPATH:+:${PYTHONPATH}}" \
   "${PYTHON_BIN}" -m slime.world_model.train_latent "${args[@]}" \
   2>&1 | tee -a "${WM_OUTPUT_DIR}/logs/phase.log"
 
 if [[ "${PHASE}" == "value_mpc" && -f "${WM_OUTPUT_DIR}/latent_world_model.pt" && -f "${WM_OUTPUT_DIR}/hidden_cache.pt" ]]; then
-  PYTHONPATH="${REPO_ROOT}/slime:${REPO_ROOT}${PYTHONPATH:+:${PYTHONPATH}}" \
+  PYTHONPATH="${REPO_ROOT}/backends/slime:${REPO_ROOT}${PYTHONPATH:+:${PYTHONPATH}}" \
     "${PYTHON_BIN}" -m slime.world_model.plan_mpc \
       --checkpoint "${WM_OUTPUT_DIR}/latent_world_model.pt" \
       --input "${WM_OUTPUT_DIR}/hidden_cache.pt" \

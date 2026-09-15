@@ -13,12 +13,12 @@ from typing import Any
 
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
-AGENTIC_RL_DIR = REPO_ROOT / "agentic_rl"
+AGENTIC_RL_DIR = REPO_ROOT / "harborrl"
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from agentic_rl.data.convert_agentharm_to_dataset import convert_record  # noqa: E402
-from agentic_rl.environments.agentharm.runtime import AgentHarmEnv  # noqa: E402
+from harborrl.data.convert_agentharm_to_dataset import convert_record  # noqa: E402
+from harborrl.environments.agentharm.runtime import AgentHarmEnv  # noqa: E402
 
 
 FILES = {

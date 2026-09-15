@@ -16,7 +16,7 @@ import time
 import urllib.request
 from pathlib import Path
 
-from agentic_rl.harnesses.eval.base import ServingSpec
+from harborrl.harnesses.eval.base import ServingSpec
 
 DEFAULT_COMMAND_TEMPLATE = (
     "python3 -m sglang.launch_server --model-path {model_path} "

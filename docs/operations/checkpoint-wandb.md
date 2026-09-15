@@ -30,10 +30,10 @@ wandb sync <LIGHTRL_PERSIST_ROOT>/wandb/<run-id>/wandb/offline-run-*
 ## 保存事务与磁盘满行为
 
 Megatron 只有在更新 `latest_checkpointed_iteration.txt` 后才算提交成功；仅存在
-`iter_NNNNNNN/` 目录不能证明保存完整。LightRL 的清理规则是：
+`iter_NNNNNNN/` 目录不能证明保存完整。HarborRL 的清理规则是：
 
 1. 保存前读取 tracker，只删除比 tracker 更新的半成品目录；tracker 缺失时仅当目录
-   带 LightRL per-run 管理标记才清除上次失败的首次保存，否则不删。
+   带 HarborRL per-run 管理标记才清除上次失败的首次保存，否则不删。
 2. 按 `--max-ckpt-keep` 清理已提交旧版本，但永不删除 tracker 指向的最后有效版本。
 3. 默认要求至少 128 GiB 空闲，或预估 checkpoint 大小的 1.15 倍（二者取大值）。
 4. 空间仍不足时打印 `CHECKPOINT_SAVE_SKIPPED_NONFATAL`，跳过本次保存并继续训练。

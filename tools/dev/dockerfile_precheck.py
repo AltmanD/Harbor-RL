@@ -9,7 +9,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from agentic_rl.environments.terminal.validation import dockerfile_precheck_error
+from harborrl.environments.terminal.validation import dockerfile_precheck_error
 
 
 def main(argv: list[str]) -> int:
