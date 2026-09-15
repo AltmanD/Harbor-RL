@@ -1102,6 +1102,10 @@ async def evaluate(request: Request) -> JSONResponse:
             status_code=410,
         )
     except Exception as exc:
+        from harborrl.data.harbor.receipt import HarborVerifierError
+        if isinstance(exc, HarborVerifierError):
+            # Completed RPC with an explicit verifier failure, not a transport retry.
+            return JSONResponse({"ok": False, "error": str(exc), "details": exc.details})
         return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
 
 

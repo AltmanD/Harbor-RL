@@ -1872,7 +1872,8 @@ def _drain_toolkit_sessions(toolkit: Any) -> None:
 
 
 class TerminalEnv:
-    def __init__(self) -> None:
+    def __init__(self, *, harbor_probe: bool = False) -> None:
+        self._harbor_probe = harbor_probe
         self._lifecycle_lock = asyncio.Lock()
         self._closed = False
         self._task_spec: TaskSpec | None = None
@@ -1973,6 +1974,11 @@ class TerminalEnv:
             raise ValueError(
                 f"task_path escapes DATASET_DIR: {self._task_spec.task_path!r}"
             ) from exc
+        if self._data_source == "harbor_terminal":
+            from harborrl.data.harbor.materializer import validate_materialized
+
+            validate_materialized(task_path, task_meta, allow_probe=self._harbor_probe)
+
         if self._data_source == "swesmith":
             from harborrl.data.convert_swesmith import (
                 expected_swesmith_task_path,
@@ -2600,7 +2606,35 @@ class TerminalEnv:
                     "timeout_sec": test_timeout_sec,
                     "error": str(exc),
                 }
+                if self._data_source == "harbor_terminal":
+                    self._last_eval.update(
+                        exception_stage="verifier_timeout", raw_reward=None
+                    )
+                    from harborrl.data.harbor.receipt import HarborVerifierError
+
+                    raise HarborVerifierError(self._last_eval) from exc
                 return 0.0
+
+            if self._data_source == "harbor_terminal":
+                from harborrl.data.harbor.receipt import HarborVerifierError, parse_reward
+
+                try:
+                    receipt = _run_container_shell(
+                        self._trial_handler.client_container_name,
+                        "cat /logs/verifier/reward.txt",
+                        timeout=30,
+                    )
+                    if receipt.returncode:
+                        raise ValueError("missing Harbor reward.txt: " + receipt.stderr)
+                    self._last_eval = parse_reward(receipt.stdout)
+                    return self._last_eval["raw_reward"]
+                except Exception as exc:
+                    self._last_eval = {
+                        "profile": "harbor_reward_txt_v1",
+                        "exception_stage": "reward_parse",
+                        "error": str(exc),
+                    }
+                    raise HarborVerifierError(self._last_eval) from exc
 
             test_output = test_session.capture_pane(capture_entire=True)
             exit_matches = _TEST_EXIT_CODE_RE.findall(test_output or "")

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from uuid import uuid4
 from typing import Any, Dict, List
 
 from slime.rollout.sglang_rollout import GenerateState
@@ -68,11 +69,39 @@ async def generate(
     session = _EnvSession()
     clients = _TurnClients()
     loop = _TurnLoopResult()
+    harbor = plan.data_source == "harbor_terminal"
+    ir = None
+    ir_saved = False
+    eval_details = None
+    eval_error = None
+    expected_version = None
+    status = Sample.Status.ABORTED
+    attempt_id = uuid4().hex
 
     try:
+        if harbor:
+            from harborrl.rollout import harbor_bridge
+
+            started_ir = harbor_bridge.build(
+                plan,
+                clients,
+                loop,
+                sampling_params,
+                None,
+                attempt_id,
+                "incomplete",
+                None,
+                None,
+            )
+            harbor_bridge.persist(started_ir, plan, started=True)
         with trace_span(sample, "environment_open"):
             await _open_env_session(plan, session)
         _build_turn_clients(args, state, plan, session, clients, sampling_params)
+        if harbor:
+            from harborrl.rollout.harbor_bridge import serving_version
+
+            # Snapshot the live server version, then require every turn to match.
+            expected_version = await serving_version(clients.sglang_client)
         with trace_span(sample, "agent_turn_loop"):
             await _run_turn_loop(plan, session, clients, loop)
 
@@ -108,7 +137,9 @@ async def generate(
             mean_uncertainty = _finite_float(
                 trajectory_uncertainty.get("mean_turn_level_uncertainty")
             )
-            mean_delta = _finite_float(trajectory_uncertainty.get("mean_abs_score_delta"))
+            mean_delta = _finite_float(
+                trajectory_uncertainty.get("mean_abs_score_delta")
+            )
             logger.info(
                 "%s Turn uncertainty: available=%s/%s mean_nll=%s "
                 "mean_abs_delta=%s low_progress=%s/%s",
@@ -121,22 +152,55 @@ async def generate(
                 trajectory_uncertainty.get("available_turn_count"),
             )
 
-        prm_turn_scores = await _collect_prm_scores(plan, clients, loop, sample)
+        prm_turn_scores = (
+            None if harbor else await _collect_prm_scores(plan, clients, loop, sample)
+        )
         # Build training samples
         dapo_overlong_cfg = _dapo_overlong_cfg(args)
-        samples = _build_samples(
-            interactions=loop.interactions,
-            base_sample=sample,
-            outcome=reward,
-            status=status,
-            prm_turn_scores=(prm_turn_scores if clients.prm_agent is not None else None),
-            prm_coef=plan.prm_coef,
-            discount=1.0,
-            encourage=False,
-            outcome_is_score=direct_score_source(plan.data_source),
-            penalize_short_response=not direct_score_source(plan.data_source),
-            dapo_overlong_cfg=dapo_overlong_cfg,
-        )
+        if harbor:
+            from harborrl.rollout import harbor_bridge
+            from harborrl.rollout.exporters.slime import ExportConfig, SlimeExporter
+
+            current_version = await harbor_bridge.serving_version(clients.sglang_client)
+            if current_version != expected_version:
+                eval_error = "serving weights changed during trajectory"
+            ir = harbor_bridge.build(
+                plan,
+                clients,
+                loop,
+                sampling_params,
+                expected_version,
+                attempt_id,
+                status,
+                eval_details,
+                eval_error,
+            )
+            harbor_bridge.persist(ir, plan)
+            ir_saved = True
+            samples = SlimeExporter.export(
+                ir,
+                sample,
+                ExportConfig(),
+                weight_version=expected_version,
+                group_id=str(plan.run_ctx.group_index),
+            )
+            dapo_overlong_cfg = None
+        else:
+            samples = _build_samples(
+                interactions=loop.interactions,
+                base_sample=sample,
+                outcome=reward,
+                status=status,
+                prm_turn_scores=(
+                    prm_turn_scores if clients.prm_agent is not None else None
+                ),
+                prm_coef=plan.prm_coef,
+                discount=1.0,
+                encourage=False,
+                outcome_is_score=direct_score_source(plan.data_source),
+                penalize_short_response=not direct_score_source(plan.data_source),
+                dapo_overlong_cfg=dapo_overlong_cfg,
+            )
         # AgenticRL emits one training Sample per turn.  All turn samples are
         # deep copies of the trajectory carrier, so retaining the trace on
         # every turn would multiply request timing counts.  Keep one canonical
@@ -156,15 +220,16 @@ async def generate(
 
         # Exploration bonuses mutate samples' reward dicts in place (no-op when
         # every EXPLORE_* / Agent57 switch is off).
-        _inject_exploration_bonuses(
-            samples,
-            sample=sample,
-            plan=plan,
-            clients=clients,
-            loop=loop,
-            status=status,
-            eval_error=eval_error,
-        )
+        if not harbor:
+            _inject_exploration_bonuses(
+                samples,
+                sample=sample,
+                plan=plan,
+                clients=clients,
+                loop=loop,
+                status=status,
+                eval_error=eval_error,
+            )
 
         _finalize_sample_metadata(
             samples,
@@ -200,6 +265,8 @@ async def generate(
         return samples
 
     except Exception as exc:
+        eval_error = f"{type(exc).__name__}: {exc}"
+        status = Sample.Status.FAILED
         if _uses_remote_terminal_env(plan.task_meta):
             _task_circuit_record_failure(plan.task_key, exc)
         log_traceback = _env_bool("TERMINAL_RL_GENERATE_FAILURE_TRACEBACK", False)
@@ -208,7 +275,9 @@ async def generate(
             plan.log_tag,
             type(exc).__name__,
             exc,
-            "" if log_traceback else " (set TERMINAL_RL_GENERATE_FAILURE_TRACEBACK=1 for traceback)",
+            ""
+            if log_traceback
+            else " (set TERMINAL_RL_GENERATE_FAILURE_TRACEBACK=1 for traceback)",
             exc_info=log_traceback,
         )
         metadata = sample.metadata if isinstance(sample.metadata, dict) else {}
@@ -264,4 +333,21 @@ async def generate(
         return [sample]
 
     finally:
-        await _close_rollout_session(plan, session, clients, loop)
+        try:
+            if harbor and not ir_saved:
+                from harborrl.rollout import harbor_bridge
+
+                ir = harbor_bridge.build(
+                    plan,
+                    clients,
+                    loop,
+                    sampling_params,
+                    expected_version,
+                    attempt_id,
+                    status,
+                    eval_details,
+                    eval_error,
+                )
+                harbor_bridge.persist(ir, plan)
+        finally:
+            await _close_rollout_session(plan, session, clients, loop)

@@ -33,7 +33,10 @@ from pathlib import Path
 import re
 import shutil
 import sys
-import tomllib
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib
 
 COMPOSE_TEMPLATE = """# You usually don't need to modify anything in this file, but you can use it to add
 # more containers or configure the client container, if needed.

@@ -75,9 +75,9 @@ esac
 export ALGO
 DATASET="$(normalize_dataset "${DATASET:-mixed}")"
 case "${DATASET}" in
-  seta|safety|agentharm|mixed|swesmith) ;;
+  seta|safety|agentharm|mixed|swesmith|harbor_terminal) ;;
   *)
-    echo "[ERROR] Unknown DATASET=${DATASET}. Use: seta|safety|agentharm|mixed|swesmith"
+    echo "[ERROR] Unknown DATASET=${DATASET}. Use: seta|safety|agentharm|mixed|swesmith|harbor_terminal"
     exit 1
     ;;
 esac

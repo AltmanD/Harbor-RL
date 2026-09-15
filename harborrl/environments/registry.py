@@ -124,6 +124,10 @@ TAU2_SPEC = EnvSpec(
 
 ENV_SPECS: tuple[EnvSpec, ...] = (
     SETA_SPEC,
+    replace(SETA_SPEC, data_source="harbor_terminal", slug="harbor_terminal",
+            slug_aliases=("harbor_terminal",),
+            interval_arg_names=("trajectory_save_interval_harbor_terminal",),
+            interval_env_names=("TRAJECTORY_SAVE_INTERVAL_HARBOR_TERMINAL",)),
     AGENT_SAFETYBENCH_SPEC,
     AGENTHARM_SPEC,
     TAU2_SPEC,

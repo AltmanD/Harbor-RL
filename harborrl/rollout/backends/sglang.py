@@ -254,9 +254,9 @@ class SGLangTurnClient:
             # serving timings belong in the observability carrier.
             generation_meta={
                 key: deepcopy(meta_info[key])
-                for key in _TRACE_META_KEYS
+                for key in (*_TRACE_META_KEYS, "weight_version")
                 if key in meta_info
-            },
+            } | {"sampling_params": deepcopy(self.sampling_params), "tools": deepcopy(tools)},
         )
         return chat_completion, interaction
 

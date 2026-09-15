@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import hashlib
 import math
 import random
 from pathlib import Path
@@ -110,6 +111,7 @@ def main() -> None:
     )
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--manifest", type=Path, help="Write an immutable source/seed/digest manifest")
     parser.add_argument("--total", type=int, default=None)
     parser.add_argument("--oversample", action="store_true")
     parser.add_argument(
@@ -123,6 +125,8 @@ def main() -> None:
         ),
     )
     args = parser.parse_args()
+    if args.manifest and (args.manifest.exists() or args.output.exists()):
+        raise FileExistsError("immutable mixture output/manifest already exists")
 
     parsed_sources = [parse_source(x) for x in args.source]
     rng = random.Random(args.seed)
@@ -158,9 +162,18 @@ def main() -> None:
 
     rng.shuffle(mixed)
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    with args.output.open("w", encoding="utf-8") as f:
+    with args.output.open("x" if args.manifest else "w", encoding="utf-8") as f:
         for record in mixed:
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+    if args.manifest:
+        manifest = {"seed": args.seed, "mode": args.mode, "sources": [
+            dict(item, sha256=hashlib.sha256(Path(item["path"]).read_bytes()).hexdigest())
+            for item in summary], "total": len(mixed),
+            "output_sha256": hashlib.sha256(args.output.read_bytes()).hexdigest()}
+        args.manifest.parent.mkdir(parents=True, exist_ok=True)
+        with args.manifest.open("x") as stream:
+            json.dump(manifest, stream, indent=2)
 
     print(
         json.dumps(

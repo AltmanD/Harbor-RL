@@ -476,7 +476,7 @@ def _build_turn_clients(
         enable_sglang_non_think=enable_sglang_non_think,
     )
 
-    if plan.prm_enable:
+    if plan.prm_enable and plan.data_source != "harbor_terminal":
         prm_router_ip = getattr(args, "prm_router_ip", None)
         prm_router_port = getattr(args, "prm_router_port", None)
         if prm_router_ip and prm_router_port:
@@ -869,6 +869,7 @@ async def _evaluate_outcome(
                 )
         except Exception as exc:
             eval_error = f"{type(exc).__name__}: {exc}"
+            eval_details = _last_eval_details(session.env_client)
             status = Sample.Status.FAILED
             reward = 0.0
             logger.error(

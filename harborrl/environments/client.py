@@ -128,6 +128,7 @@ class TerminalEnvClient:
     async def evaluate(
         self, lease_id: str, trajectory: dict[str, Any] | None = None
     ) -> float:
+        self.last_evaluate_details = None
         payload: dict[str, Any] = {"lease_id": lease_id}
         if trajectory is not None:
             payload["trajectory"] = trajectory
@@ -136,10 +137,10 @@ class TerminalEnvClient:
             payload,
             max_retries=self.evaluate_max_retries,
         )
-        if not out.get("ok", False):
-            raise RuntimeError(f"evaluate failed: {out}")
         details = out.get("details")
         self.last_evaluate_details = details if isinstance(details, dict) else None
+        if not out.get("ok", False):
+            raise RuntimeError(f"evaluate failed: {out}")
         return float(out.get("score", 0.0))
 
     async def close(self, lease_id: str) -> None:

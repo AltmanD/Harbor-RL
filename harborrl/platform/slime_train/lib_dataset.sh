@@ -289,6 +289,9 @@ MIX_MODE="${MIX_MODE:-all_visible}"
 export MIX_MODE
 
 case "${DATASET}" in
+  harbor_terminal)
+    : "${ROLLOUT_PROMPT_DATA:?Set ROLLOUT_PROMPT_DATA to a verified Harbor catalog}"
+    ;;
   seta)
     INCLUDES_SETA="1"
     ROLLOUT_PROMPT_DATA="${ROLLOUT_PROMPT_DATA:-${SETA_DATA}}"
