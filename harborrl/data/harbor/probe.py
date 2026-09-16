@@ -60,7 +60,12 @@ async def probe(source: Path, dataset: str, work: Path) -> dict:
         await asyncio.to_thread(
             docker, *run_args, "--entrypoint", "sh", image, "-c", "sleep infinity"
         )
-        await asyncio.to_thread(docker, "cp", source / "tests", f"{container}:/tests")
+        await asyncio.to_thread(
+            docker, "exec", "-u", "root", container, "mkdir", "-p", "/tests"
+        )
+        await asyncio.to_thread(
+            docker, "cp", str(source / "tests") + "/.", f"{container}:/tests"
+        )
         try:
             await asyncio.to_thread(
                 docker,

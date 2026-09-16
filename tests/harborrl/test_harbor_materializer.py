@@ -66,6 +66,48 @@ def test_rejects_unverified_compose(task):
     assert inspect(task, "a").status == "UNSUPPORTED"
 
 
+@pytest.mark.parametrize("difficulty", [None, "easy", "hard"])
+def test_materialized_task_satisfies_runtime_schema(task, tmp_path, difficulty):
+    runtime = pytest.importorskip("terminal_bench.handlers.trial_handler")
+    if difficulty:
+        with (task / "task.toml").open("a") as f:
+            f.write(f'\n[metadata]\ndifficulty="{difficulty}"\n')
+    row = materialize(task, "a", tmp_path / "output", receipt(task))
+    parsed = runtime.Task.from_yaml(Path(row["metadata"]["task_path"]) / "task.yaml")
+    assert parsed.difficulty.value == (difficulty or "medium")
+
+
+@pytest.mark.parametrize("nested", [False, True])
+def test_verifier_wrapper_accepts_runtime_copy_layout(task, tmp_path, nested):
+    import os
+    import subprocess
+    import shutil
+
+    row = materialize(task, "a", tmp_path / "output", receipt(task))
+    target = Path(row["metadata"]["task_path"])
+    staged = tmp_path / "staged"
+    verifier = tmp_path / "verifier"
+    logs = tmp_path / "logs"
+    staged.mkdir()
+    if nested:
+        shutil.copytree(target / "tests", staged / "tests")
+    else:
+        shutil.copytree(target / "tests", staged, dirs_exist_ok=True)
+    # Redirect absolute container paths into the test's isolated filesystem.
+    for script in staged.rglob("test.sh"):
+        script.write_text(script.read_text().replace("/logs/verifier", str(logs)))
+    wrapper = (target / "run-tests.sh").read_text()
+    wrapper = wrapper.replace("/logs/verifier", str(logs))
+    wrapper = wrapper.replace(" /tests", " " + str(verifier))
+    wrapper = wrapper.replace("/tests/\n", str(verifier) + "/\n")
+    subprocess.run(
+        ["bash", "-c", wrapper],
+        env={**os.environ, "TEST_DIR": str(staged)},
+        check=True,
+    )
+    assert (logs / "reward.txt").read_text().strip() == "0.5"
+
+
 @pytest.mark.parametrize("text", ["", "nan", "inf", "-1", "1.5", "{}", "1\n0"])
 def test_bad_reward_is_not_zero(text):
     with pytest.raises(ValueError):

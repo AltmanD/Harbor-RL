@@ -43,11 +43,15 @@ def _materialize(source, dataset, root, receipt, *, probe):
     try:
         shutil.copytree(source / "environment", temp / "environment")
         shutil.copytree(source / "tests", temp / "tests")
-        # Runtime copies tests/ underneath TEST_DIR; Harbor expects /tests directly.
-        # Preserve the original script and establish its original absolute path.
+        # Terminal-Bench versions either flatten tests/ into TEST_DIR or retain
+        # the directory. Preserve the verifier's original /tests layout in both.
         (temp / "run-tests.sh").write_text(
             "#!/bin/bash\nset -e\nmkdir -p /tests /logs/verifier\n"
-            'cp -a "${TEST_DIR}/tests/." /tests/\n'
+            'if [ -f "${TEST_DIR}/tests/test.sh" ]; then\n'
+            '  cp -a "${TEST_DIR}/tests/." /tests/\n'
+            'elif [ "${TEST_DIR}" != /tests ]; then\n'
+            '  cp -a "${TEST_DIR}/." /tests/\n'
+            'fi\n'
             "rm -f /logs/verifier/reward.txt /logs/verifier/reward.json\n"
             "exec bash /tests/test.sh\n"
         )
@@ -72,6 +76,7 @@ def _materialize(source, dataset, root, receipt, *, probe):
             yaml.safe_dump(
                 {
                     "instruction": instruction,
+                    "difficulty": spec.get("metadata", {}).get("difficulty") or "medium",
                     "parser_name": "pytest",
                     "max_agent_timeout_sec": spec.get("agent", {}).get(
                         "timeout_sec", 900

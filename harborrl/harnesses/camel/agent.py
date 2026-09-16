@@ -267,6 +267,19 @@ class CamelAgent(ChatAgent):
             return model_response, [], False, terminated_response
 
         if model_response.tool_call_requests:
+            # Recent Camel versions record only the tool result in
+            # _record_tool_calling; their normal step loop records the
+            # assistant request separately. Our external loop must do so too.
+            record_requests = getattr(
+                self, "_record_assistant_tool_calls_from_requests", None
+            )
+            if record_requests is not None:
+                content = (
+                    (model_response.output_messages[0].content or "")
+                    if model_response.output_messages
+                    else ""
+                )
+                record_requests(model_response.tool_call_requests, content=content)
             return model_response, list(model_response.tool_call_requests), False, None
 
         parse_error_record = await self.adetect_tool_calls_parse_error(model_response)
