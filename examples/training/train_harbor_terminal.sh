@@ -2,6 +2,12 @@
 # Run from a configured GPU training environment with a verified static catalog.
 set -euo pipefail
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
+# Config-based calls share the public parser. Environment-only calls below are
+# retained for existing experiment automation during migration.
+if [[ "${1:-}" == "--config" ]]; then
+  export PYTHONPATH="${ROOT}${PYTHONPATH:+:${PYTHONPATH}}"
+  exec python -m harborrl.cli train "$@"
+fi
 : "${ROLLOUT_PROMPT_DATA:?Set the verified Harbor catalog JSONL}"
 : "${HARBOR_LOGPROB_SOURCE:?Set the audited serving package/version identifier}"
 : "${HARBOR_LOGPROB_SEMANTICS:?Set the audited serving logprob semantics (raw_model)}"

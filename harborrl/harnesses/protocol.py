@@ -36,9 +36,9 @@ class TurnClient(Protocol):
         turn_idx: int,
     ) -> tuple[Any, Interaction]: ...
 
-    def _truncate_input_ids(self, input_ids: list[int]) -> list[int]: ...
+    def truncate_input_ids(self, input_ids: list[int]) -> list[int]: ...
 
-    def _apply_chat_template(
+    def apply_chat_template(
         self,
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]] | None,

@@ -82,6 +82,8 @@ def _clamp_int(value: Any, *, default: int, minimum: int, maximum: int) -> int:
 
 
 def _exec_terminal_tool(tool_name: str, arguments: dict[str, Any]) -> str:
+    if tool_name == "shell_exec" and not arguments.get("id"):
+        arguments = {**arguments, "id": "claude-" + uuid.uuid4().hex[:12]}
     timeout = max(1.0, _env_float("CLAUDE_CODE_TOOL_TIMEOUT_SEC", 300.0))
     try:
         _json_post("/heartbeat", {"lease_id": _lease_id()}, timeout=min(timeout, 30.0))

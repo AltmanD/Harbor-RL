@@ -1,5 +1,8 @@
 # HarborRL
 
+See the [configuration and CPU task inspection guide](docs/cleanup_status.md). Training profiles currently support interactive execution; native training is not yet validated.
+
+
 <div align="center">
 
 <img src="assets/lightrl_logo_cropped.png" alt="HarborRL Logo" width="100"/>

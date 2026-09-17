@@ -21,6 +21,7 @@ class HarnessDescriptor:
     canonical_name: str
     display_name: str
     aliases: tuple[str, ...]
+    ignored_train_arguments: tuple[str, ...] = ()
     train_target: str | None = None
     eval_target: str | None = None
 
@@ -36,6 +37,7 @@ class HarnessDescriptor:
 HARNESS_DESCRIPTORS: tuple[HarnessDescriptor, ...] = (
     HarnessDescriptor(
         canonical_name="camel_agent",
+        ignored_train_arguments=("tool_schemas", "env_client", "lease_id", "run_context", "task_meta"),
         display_name="camel-agent",
         aliases=("camel_agent", "camel", "camel-agent", "camelagent"),
         train_target="harborrl.harnesses.camel.agent:CamelAgent",
@@ -43,6 +45,7 @@ HARNESS_DESCRIPTORS: tuple[HarnessDescriptor, ...] = (
     ),
     HarnessDescriptor(
         canonical_name="claude_code_cli",
+        ignored_train_arguments=("tool_schemas",),
         display_name="claude-code",
         aliases=(
             "claude_code_cli",

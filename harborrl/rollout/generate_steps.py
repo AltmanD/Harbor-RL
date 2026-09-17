@@ -77,12 +77,11 @@ from harborrl.rollout.trajectory_store import (
     _sample_or_env_int,
     _trajectory_save_interval,
 )
+from harborrl.tasks.metadata import _extract_task_meta, _make_task_spec
 from harborrl.rollout.sample_builder import (
     _build_agent_safetybench_eval_payload,
     _env_flag,
-    _extract_task_meta,
     _last_eval_details,
-    _make_task_spec,
     _safety_split_from_meta,
     _sync_reward_aliases,
 )

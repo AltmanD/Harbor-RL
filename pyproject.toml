@@ -13,6 +13,7 @@ dependencies = [
 ]
 
 [project.scripts]
+harborrl = "harborrl.cli:main"
 harborrl-eval = "tools.evaluation.eval_cli:main"
 lightrl-eval = "tools.evaluation.eval_cli:main"
 

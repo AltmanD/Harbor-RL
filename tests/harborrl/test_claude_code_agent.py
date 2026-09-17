@@ -48,10 +48,10 @@ class DummySGLangClient:
     request_timeout = 5
     max_retries = 1
 
-    def _apply_chat_template(self, messages, tools):
+    def apply_chat_template(self, messages, tools):
         return self.tokenizer.apply_chat_template(messages, tools=tools)
 
-    def _truncate_input_ids(self, input_ids):
+    def truncate_input_ids(self, input_ids):
         return list(input_ids)
 
 
@@ -149,6 +149,7 @@ def test_claude_code_sglang_backend_records_qwen_logprobs(tmp_path, monkeypatch)
         "output_text": "qwen final answer",
         "finish_reason": "stop",
         "latency_ms": 12.0,
+        "generation_meta": {"weight_version": "7"},
     }
 
     class FakeGateway:
@@ -213,6 +214,7 @@ def test_claude_code_sglang_backend_records_qwen_logprobs(tmp_path, monkeypatch)
     assert result.interaction.output_text == "qwen final answer"
     assert result.interaction.output_token_ids == [101, 102]
     assert result.interaction.output_token_logprobs == [-0.1, -0.2]
+    assert result.interaction.generation_meta == {"weight_version": "7"}
     assert result.model_response.info["llm_backend"] == "sglang"
     assert result.model_response.info["non_trainable"] is False
     assert result.model_response.info["qwen_gateway_turns"] == 1
@@ -348,6 +350,7 @@ def test_qwen_gateway_converts_anthropic_messages_to_sglang_logprob_record(tmp_p
             "meta_info": {
                 "finish_reason": {"type": "stop"},
                 "output_token_logprobs": [[-0.1, 101], [-0.2, 102]],
+                "weight_version": "7",
             },
         }
 
@@ -373,6 +376,7 @@ def test_qwen_gateway_converts_anthropic_messages_to_sglang_logprob_record(tmp_p
     record = gateway.records()[0]
     assert record["output_token_ids"] == [101, 102]
     assert record["output_token_logprobs"] == [-0.1, -0.2]
+    assert record["generation_meta"]["weight_version"] == "7"
 
 
 def test_qwen_gateway_rejects_nonempty_text_without_logprobs(tmp_path):
@@ -531,3 +535,53 @@ def test_claude_code_sglang_backend_bridges_qwen_tool_use(tmp_path, monkeypatch)
     assert result.model_response.tool_calls_count == 1
     assert result.model_response.tool_calls[0]["source"] == "qwen-gateway-direct-bridge"
     assert result.model_response.tool_calls[0]["result"] == "created file"
+
+
+def test_gateway_sse_finishes_http_response(tmp_path):
+    import urllib.request
+
+    gateway = ClaudeCodeQwenGateway(
+        sglang_client=DummySGLangClient(),
+        records_path=tmp_path / "records.jsonl",
+        model_name="test",
+    )
+    gateway._build_message_response = lambda payload: {
+        "id": "test", "type": "message", "role": "assistant", "model": "test",
+        "content": [{"type": "text", "text": "done"}],
+        "stop_reason": "end_turn", "stop_sequence": None,
+        "usage": {"input_tokens": 1, "output_tokens": 1},
+    }
+    gateway.start()
+    try:
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        req = urllib.request.Request(
+            gateway.base_url + "/v1/messages",
+            data=b'{"stream":true}', headers={"Content-Type": "application/json"},
+        )
+        with opener.open(req, timeout=2) as response:
+            body = response.read().decode()
+        assert 'event: message_stop' in body
+        assert '"text": "done"' in body
+    finally:
+        gateway.close()
+
+
+def test_mcp_generated_shell_commands_have_session_ids(monkeypatch):
+    from harborrl.harnesses.claude_code import mcp_server
+
+    calls = []
+    monkeypatch.setenv("CLAUDE_CODE_TERMINAL_LEASE_ID", "lease-test")
+    monkeypatch.setattr(mcp_server, "_record_tool_call", lambda record: None)
+
+    def post(path, payload, **kwargs):
+        if path == "/exec_tool":
+            calls.append(payload["tool_call"]["arguments"])
+        return {"ok": True, "observation": "ok"}
+
+    monkeypatch.setattr(mcp_server, "_json_post", post)
+    mcp_server.list_dir("/workspace")
+    mcp_server.read_file("/workspace/test.py")
+    mcp_server.shell_exec("pwd", id="chosen")
+    assert calls[0]["id"] and calls[1]["id"]
+    assert calls[0]["id"] != calls[1]["id"]
+    assert calls[2]["id"] == "chosen"

@@ -253,7 +253,7 @@ class ClaudeCodeQwenGateway:
         messages = _anthropic_messages_to_chat(payload)
         tools = _anthropic_tools_to_openai(payload.get("tools"))
         input_ids = self._apply_template(messages, tools)
-        input_ids = self._client._truncate_input_ids(input_ids)
+        input_ids = self._client.truncate_input_ids(input_ids)
 
         sampling_params = dict(self._client.sampling_params)
         default_max_new_tokens = sampling_params.get("max_new_tokens")
@@ -354,6 +354,12 @@ class ClaudeCodeQwenGateway:
         }
         latency_ms = (time.monotonic() - started) * 1000.0
         record = {
+            "generation_meta": dict(meta_info),
+            "auxiliary_request": any(
+                m.get("role") == "system"
+                and "Generate a concise, sentence-case title (3-7 words)" in str(m.get("content", ""))
+                for m in messages
+            ),
             "messages": messages,
             "tools_count": len(tools),
             "input_ids": input_ids,
@@ -371,9 +377,9 @@ class ClaudeCodeQwenGateway:
 
     def _apply_template(self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]) -> list[int]:
         try:
-            return self._client._apply_chat_template(messages, tools)
+            return self._client.apply_chat_template(messages, tools)
         except Exception:
-            return self._client._apply_chat_template(messages, None)
+            return self._client.apply_chat_template(messages, None)
 
     def _post_sglang(self, payload: dict[str, Any]) -> dict[str, Any]:
         body = json.dumps(payload).encode("utf-8")
@@ -420,7 +426,7 @@ class ClaudeCodeQwenGateway:
         handler.send_response(200)
         handler.send_header("Content-Type", "text/event-stream")
         handler.send_header("Cache-Control", "no-cache")
-        handler.send_header("Connection", "keep-alive")
+        handler.send_header("Connection", "close")
         handler.end_headers()
 
         def event(name: str, data: dict[str, Any]) -> None:
@@ -488,3 +494,4 @@ class ClaudeCodeQwenGateway:
             },
         )
         event("message_stop", {"type": "message_stop"})
+        handler.close_connection = True

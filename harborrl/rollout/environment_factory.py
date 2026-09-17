@@ -11,7 +11,7 @@ from harborrl.environments.client import TerminalEnvClient
 from harborrl.environments.protocol import EnvClient
 from harborrl.environments.registry import local_env_spec
 from harborrl.rollout.admission import _await_with_optional_timeout
-from harborrl.rollout.sample_builder import _make_task_spec
+from harborrl.tasks.metadata import _make_task_spec
 
 logger = logging.getLogger(__name__)
 

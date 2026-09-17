@@ -112,7 +112,7 @@ class SGLangTurnClient:
         self.marker = "\n[OMITTED MIDDLE]\n"
         self.sep_ids = self.tokenizer.encode(self.marker, add_special_tokens=False)
 
-    def _truncate_input_ids(self, input_ids: List[int]) -> List[int]:
+    def truncate_input_ids(self, input_ids: List[int]) -> List[int]:
         max_toks = self.max_input_tokens
         if max_toks is None or len(input_ids) <= max_toks:
             return input_ids
@@ -143,8 +143,8 @@ class SGLangTurnClient:
         tools: List[dict[str, Any]] | None,
         turn_idx: int,
     ) -> tuple[ChatCompletion, Interaction]:
-        input_ids = self._apply_chat_template(messages, tools)
-        input_ids = self._truncate_input_ids(input_ids)
+        input_ids = self.apply_chat_template(messages, tools)
+        input_ids = self.truncate_input_ids(input_ids)
         payload: Dict[str, Any] = {
             "input_ids": input_ids,
             "sampling_params": self.sampling_params,
@@ -260,7 +260,7 @@ class SGLangTurnClient:
         )
         return chat_completion, interaction
 
-    def _apply_chat_template(
+    def apply_chat_template(
         self,
         messages: List[dict[str, Any]],
         tools: List[dict[str, Any]] | None,
@@ -283,3 +283,7 @@ class SGLangTurnClient:
                 )
 
         raise ValueError(f"Unsupported chat_template_type: {self.chat_template_type!r}")
+
+    # Compatibility for external clients during the public-interface migration.
+    _apply_chat_template = apply_chat_template
+    _truncate_input_ids = truncate_input_ids

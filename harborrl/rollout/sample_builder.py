@@ -7,7 +7,7 @@ from typing import Any, Dict, List
 
 from slime.utils.types import Sample
 
-from harborrl.types import Interaction, TaskSpec
+from harborrl.types import Interaction
 from harborrl.algorithms.dive_po.rewards.shared import _sync_reward_aliases
 from harborrl.environments.registry import (
     safety_split_applies as _safety_split_applies,
@@ -15,27 +15,7 @@ from harborrl.environments.registry import (
 from harborrl.rollout.trajectory_store import _optional_int
 
 
-def _extract_task_meta(sample: Sample) -> Dict[str, Any]:
-    if isinstance(sample.prompt, dict):
-        return sample.prompt
-
-    metadata = sample.metadata or {}
-    task_meta = metadata.get("task_meta") if isinstance(metadata, dict) else None
-    if isinstance(task_meta, dict):
-        return task_meta
-
-    if isinstance(metadata, dict):
-        return metadata
-
-    return {}
-
-
-def _make_task_spec(meta: Dict[str, Any]) -> TaskSpec:
-    return TaskSpec(
-        task_name=meta.get("task_name", "unknown"),
-        task_path=meta.get("task_path", ""),
-        instruction=meta.get("instruction", ""),
-    )
+from harborrl.tasks.metadata import _extract_task_meta, _make_task_spec
 
 
 def _last_eval_details(env_client: Any) -> dict[str, Any] | None:

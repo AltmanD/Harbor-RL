@@ -39,13 +39,11 @@ def create_harness(name: str, **kwargs: Any) -> Any:
     module_name, class_name = _HARNESS_TARGETS[normalize_harness_name(name)]
     factory = getattr(import_module(module_name), class_name)
     signature = inspect.signature(factory)
-    accepts_kwargs = any(
-        parameter.kind is inspect.Parameter.VAR_KEYWORD
-        for parameter in signature.parameters.values()
-    )
-    if accepts_kwargs:
-        return factory(**kwargs)
-    accepted = {
-        key: value for key, value in kwargs.items() if key in signature.parameters
-    }
+    descriptor = get_harness_descriptor(name, capability="train")
+    accepted = {key: value for key, value in kwargs.items()
+                if key not in descriptor.ignored_train_arguments}
+    try:
+        signature.bind(**accepted)
+    except TypeError as exc:
+        raise ValueError(f"Invalid arguments for {descriptor.canonical_name}: {exc}") from exc
     return factory(**accepted)

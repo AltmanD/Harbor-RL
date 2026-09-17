@@ -1,5 +1,8 @@
 # HarborRL
 
+配置入口与 CPU 任务检查见 [仓库整理使用说明](docs/cleanup_status.md)。当前训练配置支持 interactive；native 尚未验收。
+
+
 <div align="center">
 
 <img src="assets/lightrl_logo_cropped.png" alt="HarborRL Logo" width="80"/>

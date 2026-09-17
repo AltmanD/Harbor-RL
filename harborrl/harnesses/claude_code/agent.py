@@ -378,6 +378,7 @@ class ClaudeCodeAgent:
         latency_ms = (time.monotonic() - started) * 1000.0
         text, raw_result = _parse_claude_output(completed.stdout, self._output_format)
         qwen_records = self._load_qwen_gateway_records()
+        qwen_records = [r for r in qwen_records if not r.get("auxiliary_request")]
         tool_calls = self._load_tool_calls()
         if self._uses_sglang_gateway() and not tool_calls:
             bridged_tool_calls = self._execute_qwen_tool_uses(qwen_records)
@@ -940,6 +941,7 @@ class ClaudeCodeAgent:
                     finish_reason=str(record.get("finish_reason") or "stop"),
                     messages=list(record.get("messages") or []),
                     latency_ms=float(record.get("latency_ms") or 0.0),
+                    generation_meta=dict(record.get("generation_meta") or {}),
                 )
             )
         return interactions

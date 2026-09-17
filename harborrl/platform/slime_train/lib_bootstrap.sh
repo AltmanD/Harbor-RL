@@ -7,8 +7,8 @@ fi
 DRY_RUN="${DRY_RUN:-0}"
 
 # ── Cleanup previous processes ───────────────────────────────────────
-if [[ "${DRY_RUN}" == "1" ]]; then
-  log "DRY_RUN=1: skipping process cleanup and Ray startup"
+if [[ "${DRY_RUN}" == "1" || "${HARBORRL_SKIP_GLOBAL_CLEANUP:-0}" == "1" ]]; then
+  log "Skipping global process cleanup"
 else
   pkill -9 sglang || true
   sleep 2
