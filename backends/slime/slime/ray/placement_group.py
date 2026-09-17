@@ -1,4 +1,6 @@
 import logging
+import json
+from pathlib import Path
 import os
 import socket
 
@@ -130,6 +132,13 @@ def create_placement_groups(args):
         critic_pg_reordered_bundle_indices = actor_pg_reordered_bundle_indices[critic_offset:]
         critic_pg_reordered_gpu_ids = actor_pg_reordered_gpu_ids[critic_offset:]
 
+    if os.getenv('HARBORRL_VERIFY_POLICY_POOL') == '1':
+        actor_count = args.actor_num_nodes * args.actor_num_gpus_per_node
+        mapping = {'colocate': args.colocate, 'reserved_gpus': num_gpus,
+                   'actor_gpu_ids': actor_pg_reordered_gpu_ids[:actor_count],
+                   'rollout_gpu_ids': rollout_pg_reordered_gpu_ids[:args.rollout_num_gpus]}
+        (Path(os.environ['RUN_DIR']) / 'gpu-mapping.json').write_text(json.dumps(mapping, indent=2)+'\n')
+
     return {
         "actor": (pg, actor_pg_reordered_bundle_indices, actor_pg_reordered_gpu_ids),
         "critic": (pg, critic_pg_reordered_bundle_indices, critic_pg_reordered_gpu_ids) if args.use_critic else None,
@@ -203,6 +212,6 @@ def create_rollout_manager(args, pg, prm_pg=None):
         ray.get(rollout_manager.check_weights.remote(action="reset_tensors"))
 
     if args.offload_rollout:
-        ray.get(rollout_manager.offload.remote())
+        ray.get(rollout_manager.offload.remote(), timeout=300)
 
     return rollout_manager, num_rollout_per_epoch

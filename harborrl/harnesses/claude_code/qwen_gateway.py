@@ -156,6 +156,10 @@ class ClaudeCodeQwenGateway:
         gateway = self
 
         class Handler(BaseHTTPRequestHandler):
+            def setup(self) -> None:
+                super().setup()
+                self.connection.settimeout(30)
+
             def log_message(self, fmt: str, *args: Any) -> None:
                 logger.debug("claude-code qwen gateway: " + fmt, *args)
 
@@ -168,6 +172,10 @@ class ClaudeCodeQwenGateway:
         self._records_path.parent.mkdir(parents=True, exist_ok=True)
         self._records_path.unlink(missing_ok=True)
         self._httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        # server_close must join auxiliary CLI requests before rollout can
+        # release inference memory. ThreadingHTTPServer defaults to daemon
+        # handlers, which are otherwise allowed to outlive close().
+        self._httpd.daemon_threads = False
         port = int(self._httpd.server_address[1])
         self.base_url = f"http://127.0.0.1:{port}"
         self._thread = threading.Thread(
@@ -388,9 +396,17 @@ class ClaudeCodeQwenGateway:
             headers["X-SMG-Routing-Key"] = self._client.session_id
         req = request.Request(self._client.url, data=body, headers=headers, method="POST")
         timeout = self._client.request_timeout
+        if os.getenv("HARBORRL_VERIFY_POLICY_POOL") == "1":
+            timeout = min(timeout or 300, 300)
         retries = max(1, int(getattr(self._client, "max_retries", 1) or 1))
+        deadline = time.monotonic() + 300 if os.getenv("HARBORRL_VERIFY_POLICY_POOL") == "1" else None
         last_exc: BaseException | None = None
         for attempt in range(retries):
+            if deadline is not None:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise TimeoutError("SGLang gateway request exceeded 300s") from last_exc
+                timeout = min(timeout, remaining)
             try:
                 with request.urlopen(req, timeout=timeout) as resp:
                     return json.loads(resp.read().decode("utf-8"))

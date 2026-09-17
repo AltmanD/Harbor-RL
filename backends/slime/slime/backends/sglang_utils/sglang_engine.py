@@ -128,10 +128,13 @@ def _wait_server_healthy(base_url, api_key, is_process_alive):
         "Authorization": f"Bearer {api_key}",
     }
 
+    deadline = time.monotonic() + 600
     with requests.Session() as session:
         while True:
+            if time.monotonic() > deadline:
+                raise TimeoutError(f"SGLang startup timed out: {base_url}")
             try:
-                response = session.get(f"{base_url}/health_generate", headers=headers)
+                response = session.get(f"{base_url}/health_generate", headers=headers, timeout=10)
                 if response.status_code == 200:
                     break
             except requests.RequestException:
@@ -144,8 +147,10 @@ def _wait_server_healthy(base_url, api_key, is_process_alive):
 
         # use flush_cache to make sure the working queue is empty, so that we can do offload
         while True:
+            if time.monotonic() > deadline:
+                raise TimeoutError(f"SGLang startup cache drain timed out: {base_url}")
             try:
-                response = session.get(f"{base_url}/flush_cache", headers=headers)
+                response = session.get(f"{base_url}/flush_cache", headers=headers, timeout=10)
                 if response.status_code == 200:
                     break
 
@@ -282,14 +287,14 @@ class SGLangEngine(RayActor):
             return
 
         url = f"http://{self.server_host}:{self.server_port}/{endpoint}"
-        response = requests.post(url, json=payload or {})
+        response = requests.post(url, json=payload or {}, timeout=300)
         try:
             response.raise_for_status()
         except requests.exceptions.HTTPError as e:
             # On single-GPU demo: NCCL cannot sync between processes sharing
             # the same physical GPU. Skip the sync and continue serving the
             # original checkpoint weights.
-            if "Duplicate GPU detected" in response.text or "ncclInvalidUsage" in response.text:
+            if os.getenv("HARBORRL_VERIFY_POLICY_POOL") != "1" and ("Duplicate GPU detected" in response.text or "ncclInvalidUsage" in response.text):
                 logger.warning(
                     "Weight sync skipped (NCCL duplicate GPU on single-GPU setup): %s",
                     response.text[:200],
@@ -403,9 +408,18 @@ class SGLangEngine(RayActor):
         if self.node_rank != 0:
             return
         url = f"http://{self.server_host}:{self.server_port}/get_weight_version"
-        response = requests.get(url)
+        response = requests.get(url, timeout=30)
         response.raise_for_status()
         return response.json()["weight_version"]
+
+    def policy_state(self):
+        if self.node_rank != 0:
+            raise RuntimeError('policy_state requires the engine leader')
+        endpoint = f"http://{self.server_host}:{self.server_port}"
+        response = requests.get(endpoint + '/health', timeout=30)
+        response.raise_for_status()
+        return {'endpoint': endpoint, 'healthy': True,
+                'weight_version': self.get_weight_version()}
 
     def release_memory_occupation(self, tags: list[str] | None = None):
         self.flush_cache()

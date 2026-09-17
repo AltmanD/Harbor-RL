@@ -122,13 +122,13 @@ class RayTrainGroup:
 
     def update_weights(self):
         """Broadcast weights from rank 0 to all other ranks."""
-        return ray.get([actor.update_weights.remote() for actor in self._actor_handlers])
+        return ray.get([actor.update_weights.remote() for actor in self._actor_handlers], timeout=300)
 
     def onload(self):
-        return ray.get([actor.wake_up.remote() for actor in self._actor_handlers])
+        return ray.get([actor.wake_up.remote() for actor in self._actor_handlers], timeout=300)
 
     def offload(self):
-        return ray.get([actor.sleep.remote() for actor in self._actor_handlers])
+        return ray.get([actor.sleep.remote() for actor in self._actor_handlers], timeout=300)
 
     def clear_memory(self):
         return ray.get([actor.clear_memory.remote() for actor in self._actor_handlers])

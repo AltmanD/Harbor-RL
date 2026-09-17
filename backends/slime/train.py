@@ -1,4 +1,8 @@
 import logging
+import json
+import os
+from pathlib import Path
+from contextlib import contextmanager
 import time
 
 import ray
@@ -122,6 +126,20 @@ def _get_rollout_generation_result(args, rollout_manager, rollout_id):
                 time.sleep(wait_s)
 
 
+@contextmanager
+def layout_phase(name):
+    started = time.monotonic()
+    status = 'failed'
+    try:
+        yield
+        status = 'passed'
+    finally:
+        if os.getenv('HARBORRL_VERIFY_POLICY_POOL') == '1':
+            with (Path(os.environ['RUN_DIR']) / 'layout-phases.jsonl').open('a') as f:
+                f.write(json.dumps({'phase': name, 'elapsed': time.monotonic()-started,
+                                    'status': status, 'timestamp': time.time()}) + '\n')
+
+
 def train(args):
     configure_logger()
     # allocate the GPUs
@@ -136,16 +154,21 @@ def train(args):
     actor_model, critic_model = create_training_models(args, pgs, rollout_manager)
 
     if args.offload_rollout:
-        ray.get(rollout_manager.onload_weights.remote())
+        with layout_phase("rollout_weights_onload"):
+            ray.get(rollout_manager.onload_weights.remote(), timeout=300)
 
     # always update weight first so that sglang has the loaded weights from training.
-    actor_model.update_weights()
+    with layout_phase("initial_weight_sync"):
+        actor_model.update_weights()
 
     if args.check_weight_update_equal:
         ray.get(rollout_manager.check_weights.remote(action="compare"))
 
     if args.offload_rollout:
-        ray.get(rollout_manager.onload_kv.remote())
+        with layout_phase("rollout_kv_onload"):
+            ray.get(rollout_manager.onload_kv.remote(), timeout=300)
+    if os.getenv("HARBORRL_VERIFY_POLICY_POOL") == "1":
+        ray.get(rollout_manager.verify_policy_pool.remote(), timeout=90)
 
     explicit_eval_steps = set(args.eval_steps or [])
 
@@ -204,7 +227,8 @@ def train(args):
         ):
             _relay_pending_metrics(ray.get(rollout_manager.eval.remote(0)))
 
-        gen_result = _get_rollout_generation_result(args, rollout_manager, rollout_id)
+        with layout_phase("rollout"):
+            gen_result = _get_rollout_generation_result(args, rollout_manager, rollout_id)
         rollout_data_ref, pending = _resolve_generation_result(gen_result)
         if pending:
             _relay_pending_metrics(pending)
@@ -213,7 +237,8 @@ def train(args):
             continue
 
         if args.offload_rollout:
-            ray.get(rollout_manager.offload.remote())
+            with layout_phase("rollout_offload"):
+                ray.get(rollout_manager.offload.remote(), timeout=300)
 
         train_iters_per_rollout = max(1, int(getattr(args, "train_iters_per_rollout", 1) or 1))
         if train_iters_per_rollout > 1 and getattr(args, "loss_type", "policy_loss") != "decoupled_policy_loss":
@@ -247,7 +272,8 @@ def train(args):
                     _relay_pending_metrics(ray.get(actor_model.async_train(rollout_id, current_rollout_data_ref)))
                 _relay_pending_metrics(ray.get(critic_train_handle))
             else:
-                _relay_pending_metrics(ray.get(actor_model.async_train(rollout_id, current_rollout_data_ref)))
+                with layout_phase("training"):
+                    _relay_pending_metrics(ray.get(actor_model.async_train(rollout_id, current_rollout_data_ref)))
 
             if getattr(args, "update_policy_version_every_train_iter", False):
                 ray.get(rollout_manager.on_policy_update.remote())
@@ -264,12 +290,18 @@ def train(args):
         ):
             save(rollout_id)
 
-        offload_train()
+        with layout_phase("train_offload"):
+            offload_train()
         if args.offload_rollout:
-            ray.get(rollout_manager.onload_weights.remote())
-        actor_model.update_weights()
+            with layout_phase("rollout_weights_onload"):
+                ray.get(rollout_manager.onload_weights.remote(), timeout=300)
+        with layout_phase("weight_sync"):
+            actor_model.update_weights()
         if args.offload_rollout:
-            ray.get(rollout_manager.onload_kv.remote())
+            with layout_phase("rollout_kv_onload"):
+                ray.get(rollout_manager.onload_kv.remote(), timeout=300)
+        if os.getenv("HARBORRL_VERIFY_POLICY_POOL") == "1":
+            ray.get(rollout_manager.verify_policy_pool.remote(), timeout=90)
 
         completed_step = rollout_id + 1
         should_eval = (

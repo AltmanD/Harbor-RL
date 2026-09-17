@@ -53,6 +53,19 @@ def context(plan, clients, sampling_params, expected_version, attempt_id):
 async def serving_version(client):
     import aiohttp
 
+    if os.getenv('HARBORRL_VERIFY_POLICY_POOL') == '1':
+        import json
+        from pathlib import Path
+        from harborrl.platform.policy_pool import validate_pool
+        pool = json.loads((Path(os.environ['RUN_DIR']) / 'policy-pool.json').read_text())
+        states = []
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session:
+            for engine in pool['engines']:
+                async with session.get(engine['endpoint'] + '/get_weight_version') as response:
+                    response.raise_for_status()
+                    states.append({**engine, 'weight_version': (await response.json())['weight_version']})
+        return validate_pool(states, pool['weight_version'])
+
     url = (
         os.getenv("HARBOR_VERSION_ENDPOINT")
         or client.url.rsplit("/", 1)[0] + "/get_weight_version"

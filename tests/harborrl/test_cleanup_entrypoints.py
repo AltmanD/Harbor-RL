@@ -37,6 +37,7 @@ def test_config_override_and_no_ambient_training_override(tmp_path, monkeypatch)
 def test_dry_run_has_no_launch_or_output(tmp_path, monkeypatch, capsys):
     p = profile(tmp_path)
     monkeypatch.setattr(subprocess, 'call', lambda *a, **k: pytest.fail('launched process'))
+    monkeypatch.setattr(subprocess, 'Popen', lambda *a, **k: pytest.fail('launched process'))
     before = sorted(tmp_path.rglob('*'))
     assert main(['train', '--config', str(p), '--dry-run']) == 0
     assert json.loads(capsys.readouterr().out)['config']['execution']['backend'] == 'lightrl_interactive'

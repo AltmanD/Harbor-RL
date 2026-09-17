@@ -473,7 +473,12 @@ class MegatronTrainRayActor(TrainRayActor):
         )
 
     def train_actor(self, rollout_id: int, rollout_data: RolloutBatch) -> None:
-        if _skip_zero_trainable_enabled() and _trainable_token_count(rollout_data) <= 0.0:
+        trainable_tokens = _trainable_token_count(rollout_data)
+        if os.getenv('HARBORRL_VERIFY_POLICY_POOL') == '1':
+            count = torch.tensor(trainable_tokens, device=torch.cuda.current_device())
+            dist.all_reduce(count, group=mpu.get_data_parallel_group())
+            trainable_tokens = count.item()
+        if _skip_zero_trainable_enabled() and trainable_tokens <= 0.0:
             if is_megatron_main_rank():
                 logger.warning(
                     "Skipping actor train for rollout_id=%s because all loss_masks are zero",
@@ -700,6 +705,12 @@ class MegatronTrainRayActor(TrainRayActor):
             print_memory("before update_weights")
             self.weight_updater.update_weights()
             print_memory("after update_weights")
+
+            if os.getenv('HARBORRL_VERIFY_POLICY_POOL') == '1':
+                # All training ranks check the pool before completing the update.
+                versions = ray.get([engine.get_weight_version.remote() for engine in rollout_engines], timeout=90)
+                if not versions or any(str(v) != str(self.weight_updater.weight_version) for v in versions):
+                    raise RuntimeError(f'policy pool update incomplete: {versions}')
 
             if self.args.ci_test and len(rollout_engines) > 0:
                 engine = random.choice(rollout_engines)

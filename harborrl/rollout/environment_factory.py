@@ -138,6 +138,8 @@ async def _create_env_client(
         op_name="terminal env allocate",
     )
     lease_id = str(lease["lease_id"])
+    from harborrl.platform.run_leases import record_lease
+    record_lease(env_server_url, lease_id)
     logger.info(
         "Using remote terminal env backend lease=%s server=%s", lease_id, env_server_url
     )

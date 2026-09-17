@@ -1,0 +1,31 @@
+schema_version: 1
+tasks:
+  catalog: ${HARBORRL_CATALOG}
+execution:
+  backend: lightrl_interactive
+harness:
+  name: camel_agent
+model:
+  provider: sglang
+  checkpoint: ${HARBORRL_MODEL_PATH}
+  reference: ${HARBORRL_REFERENCE_PATH}
+  args_file: qwen3-8B
+training:
+  backend: slime
+  engine: megatron
+  algorithm: grpo
+  logprob_source: ${HARBOR_LOGPROB_SOURCE}
+  logprob_semantics: raw_model
+deployment:
+  worker_urls: ${HARBORRL_WORKER_URLS}
+  num_gpus: 8
+  actor_gpus: 6
+  rollout_gpus: 2
+  layout: split
+  actor_tensor_parallel_size: 2
+  rollout_gpus_per_engine: 2
+output:
+  root: ../runs
+backend_options:
+  ROLLOUT_BATCH_SIZE: 2
+  N_SAMPLES: 6

@@ -585,3 +585,42 @@ def test_mcp_generated_shell_commands_have_session_ids(monkeypatch):
     assert calls[0]["id"] and calls[1]["id"]
     assert calls[0]["id"] != calls[1]["id"]
     assert calls[2]["id"] == "chosen"
+
+
+def test_gateway_close_drains_active_request(tmp_path):
+    import threading
+    import urllib.request
+    from concurrent.futures import ThreadPoolExecutor
+
+    entered, release = threading.Event(), threading.Event()
+    gateway = ClaudeCodeQwenGateway(
+        sglang_client=DummySGLangClient(), records_path=tmp_path / "records.jsonl",
+    )
+
+    def handle(handler):
+        entered.set()
+        assert release.wait(5)
+        gateway._write_json(handler, {"ok": True})
+
+    gateway._handle_get = handle
+    gateway.start()
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+    def fetch():
+        with opener.open(gateway.base_url + "/v1/models", timeout=5) as response:
+            return json.load(response)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        request_future = executor.submit(fetch)
+        try:
+            assert entered.wait(2)
+            close_future = executor.submit(gateway.close)
+            # shutdown takes up to the serve_forever poll interval (0.5s).
+            # After that close must still wait for the active handler.
+            import time
+            time.sleep(0.7)
+            assert not close_future.done()
+        finally:
+            release.set()
+        assert request_future.result(timeout=3) == {"ok": True}
+        close_future.result(timeout=3)
