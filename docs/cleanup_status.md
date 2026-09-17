@@ -43,3 +43,7 @@ Python 入口控制已迁移的任务、模型、harness 和资源字段，调�
 ## 本次检查记录
 
 定向回归：60 passed、10 skipped（跳过项需要当前环境缺失的可选依赖）。Python 编译、shell 语法和 git diff whitespace 检查通过。全量 `tests/harborrl` 收集被 6 项错误阻断，涉及缺少 Torch 和历史测试的已迁移文件路径；未执行真实 GPU、Docker 或 native 训练验收。
+
+GPU 回归准备发现并补齐的入口缺口：`backend_options` 为有限白名单的 Slime 过渡配置，用于显式指定采样预算、输出、CLI 与观测 hook；不能覆盖顶层模型或 harness 字段。Megatron doctor 接受仓库随附源码。参数变化观测器为 `harborrl.platform.parameter_probe.before_step`，输出到本次 RUN_DIR，避免依赖历史实验脚本。真实三机验收结果另存实验记录。
+
+2026-09-17 三机真实回归完成：Camel 48/48 RL_READY、5 次非零更新；Claude 24/24 RL_READY、6 step 中 4 次非零更新，67 条 MCP 工具记录无错误。两者权重版本 1→2→3、model-only checkpoint iteration 2、Ray SUCCEEDED，worker 租约和 GPU 均释放。Camel 暴露旧 Ray CLI 成功状态解析错误，修复后 Claude 完整入口退出 0。GPU 定向回归最终 59 passed。详细证据保存在 `runs/cleanup-regression-20260917/`；这补齐 interactive 真实训练回归，不表示 native 已验收。

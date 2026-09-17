@@ -12,6 +12,19 @@ from harborrl.harnesses.identity import get_harness_descriptor
 
 ROOT = Path(__file__).resolve().parents[2]
 # Backend tuning remains explicit in the profile, using the launcher's names.
+BACKEND_OPTIONS = frozenset("""
+DATASET_DIR CUSTOM_CONFIG_PATH MAX_TURN ROLLOUT_MAX_RESPONSE_LEN
+ROLLOUT_MAX_CONTEXT_LEN ROLLOUT_BATCH_SIZE N_SAMPLES NUM_ROLLOUT
+ROLLOUT_TEMPERATURE MAX_TOKENS_PER_GPU OPTIMIZER_CPU_OFFLOAD USE_REMOTE_ENV
+START_ENV_POOL_SERVER ENV_SERVER_URL CKPT_ROOT SAVE_CKPT RESUME_LOAD
+MAX_CKPT_KEEP SAVE_INTERVAL CHECKPOINT_SAVE_FATAL CHECKPOINT_MIN_FREE_GB
+CHECKPOINT_EXPECTED_GB HARBOR_VERSION_ENDPOINT SGLANG_RETURN_ORIGINAL_LOGPROB
+EXTRA_GRPO_ARGS CLAUDE_CODE_CLI CLAUDE_CODE_LLM_BACKEND
+CLAUDE_CODE_MARK_NON_TRAINABLE CLAUDE_CODE_MAX_TOOL_ROUNDS
+CLAUDE_CODE_TURN_TIMEOUT_SEC CLAUDE_CODE_LOCAL_RUN_ROOT WANDB_ENABLE
+WANDB_MODE HF_HUB_OFFLINE TRANSFORMERS_OFFLINE HF_HOME TORCH_EXTENSIONS_DIR
+TRITON_CACHE_DIR RAY_TMPDIR
+""".split())
 FIELDS = {
     'tasks': {'catalog'}, 'execution': {'backend'}, 'harness': {'name'},
     'model': {'provider', 'checkpoint', 'reference', 'args_file'},
@@ -29,12 +42,12 @@ def load_config(path, overrides=()):
     for override in overrides:
         key, sep, value = override.partition('=')
         parts = key.split('.')
-        if not sep or len(parts) != 2 or parts[0] not in FIELDS or parts[1] not in FIELDS[parts[0]]:
+        if not sep or len(parts) != 2 or parts[0] not in (set(FIELDS) | {'backend_options'}) or parts[1] not in (BACKEND_OPTIONS if parts[0] == 'backend_options' else FIELDS[parts[0]]):
             raise ValueError(f'unknown override: {key}')
         config.setdefault(parts[0], {})[parts[1]] = yaml.safe_load(value)
     if config.get('schema_version') != 1:
         raise ValueError('schema_version must be 1')
-    if set(config) - (set(FIELDS) | {'schema_version'}):
+    if set(config) - (set(FIELDS) | {'schema_version', 'backend_options'}):
         raise ValueError('unknown configuration section')
     def expand(value):
         if isinstance(value, str):
@@ -45,6 +58,13 @@ def load_config(path, overrides=()):
                 return os.environ[name]
             return re.sub(r'\$\{([A-Za-z_][A-Za-z0-9_]*)\}', replace, value)
         return value
+    backend_options = config.get('backend_options', {})
+    if not isinstance(backend_options, dict) or set(backend_options) - BACKEND_OPTIONS:
+        raise ValueError('unknown backend_options; use documented Slime transition options')
+    for key, value in backend_options.items():
+        if not isinstance(value, (str, int, float)) or isinstance(value, bool):
+            raise ValueError(f'backend_options.{key} must be a string or number')
+        backend_options[key] = str(expand(value))
     for section, fields in FIELDS.items():
         values = config.get(section)
         if not isinstance(values, dict) or set(values) != fields:
@@ -97,6 +117,7 @@ def launch_plan(config):
         'EXPLORE_INTRINSIC': '0', 'EXPLORE_AGENT57_LITE': '0', 'DAPO_OVERLONG_BUFFER_ENABLE': '0',
         'HARBORRL_SKIP_GLOBAL_CLEANUP': '1',
     }
+    env.update(c.get('backend_options', {}))
     return {'config': c, 'environment': {k: str(v) for k,v in env.items()},
             'command': ['bash', str(ROOT / 'harborrl/platform/slime_train.sh')],
             'required_services': ['environment worker', 'local Ray and SGLang (launcher managed)'],

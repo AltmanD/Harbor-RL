@@ -815,11 +815,11 @@ for ((status_attempt = 1; status_attempt <= RAY_STATUS_RETRIES; status_attempt++
   RAY_STATUS_OUTPUT=$(ray job status --address="http://${MASTER_ADDR}:8265" "${RAY_JOB_SUBMISSION_ID}" --log-style=record 2>&1)
   echo "${RAY_STATUS_OUTPUT}"
   RAY_STATUS_LOWER=$(echo "${RAY_STATUS_OUTPUT}" | tr '[:upper:]' '[:lower:]')
-  if [[ "${RAY_STATUS_LOWER}" == *"status for job"* && "${RAY_STATUS_LOWER}" == *"succeeded"* ]]; then
+  if [[ ( "${RAY_STATUS_LOWER}" == *"status for job"* || "${RAY_STATUS_LOWER}" == *"job '${RAY_JOB_SUBMISSION_ID}' succeeded"* ) && "${RAY_STATUS_LOWER}" == *"succeeded"* ]]; then
     RAY_STATUS_STATE="succeeded"
     break
   fi
-  if [[ "${RAY_STATUS_LOWER}" == *"status for job"* && ( "${RAY_STATUS_LOWER}" == *"failed"* || "${RAY_STATUS_LOWER}" == *"stopped"* ) ]]; then
+  if [[ ( "${RAY_STATUS_LOWER}" == *"status for job"* || "${RAY_STATUS_LOWER}" == *"job '${RAY_JOB_SUBMISSION_ID}' failed"* || "${RAY_STATUS_LOWER}" == *"job '${RAY_JOB_SUBMISSION_ID}' stopped"* ) && ( "${RAY_STATUS_LOWER}" == *"failed"* || "${RAY_STATUS_LOWER}" == *"stopped"* ) ]]; then
     RAY_STATUS_STATE="failed"
     break
   fi

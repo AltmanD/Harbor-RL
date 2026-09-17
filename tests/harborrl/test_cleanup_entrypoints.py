@@ -46,10 +46,11 @@ def test_dry_run_has_no_launch_or_output(tmp_path, monkeypatch, capsys):
 def test_task_helpers_import_without_training_dependencies():
     script = '''
 import sys
+before = set(sys.modules)
 from harborrl.tasks.metadata import _make_task_spec
 from harborrl.tasks.cli import main
 assert _make_task_spec({'task_name': 'x'}).task_name == 'x'
-assert not any(m in sys.modules for m in ['torch', 'ray', 'slime', 'camel'])
+assert not any(m in set(sys.modules) - before for m in ['torch', 'ray', 'slime', 'camel'])
 '''
     subprocess.run([sys.executable, '-c', script], check=True)
 
@@ -98,3 +99,20 @@ def test_missing_interpolation_is_explicit(tmp_path, monkeypatch):
     monkeypatch.delenv('MISSING_TEST_MODEL', raising=False)
     with pytest.raises(ValueError, match='missing declared environment'):
         load_config(p)
+
+
+def test_explicit_backend_options_do_not_accept_model_overrides(tmp_path):
+    p = profile(tmp_path)
+    config = load_config(p, ['backend_options.N_SAMPLES=8'])
+    assert launch_plan(config)['environment']['N_SAMPLES'] == '8'
+    with pytest.raises(ValueError, match='unknown override'):
+        load_config(p, ['backend_options.HF_CKPT=/wrong'])
+
+
+def test_ray_status_accepts_current_cli_success():
+    source = Path('harborrl/platform/slime_train/lib_launch.sh').read_text()
+    start = source.index('  RAY_STATUS_LOWER=$(echo')
+    end = source.index('  if (( status_attempt', start)
+    block = source[start:end]
+    script = "RAY_JOB_SUBMISSION_ID=test-job\nRAY_STATUS_OUTPUT=\"Job 'test-job' succeeded\"\nfor i in 1; do\n" + block + "\ndone\n[[ $RAY_STATUS_STATE == succeeded ]]"
+    subprocess.run(['bash', '-c', script], check=True)

@@ -62,7 +62,7 @@ class FakeEnvClient:
 def test_claude_code_agent_runs_cli_and_writes_mcp_config(tmp_path, monkeypatch):
     fake_cli = tmp_path / "claude"
     fake_cli.write_text(
-        "#!/usr/bin/env python3\n"
+        "#!/usr/bin/env -S python3 -S\n"
         "import json, os, pathlib, sys\n"
         "assert 'CLAUDE_CODE_SESSION_ID' not in os.environ\n"
         "assert os.environ['TERMINAL_RL_CLAUDE_CODE_SESSION_ID'].startswith('terminal-rl-claude-')\n"
@@ -172,7 +172,7 @@ def test_claude_code_sglang_backend_records_qwen_logprobs(tmp_path, monkeypatch)
 
     fake_cli = tmp_path / "claude"
     fake_cli.write_text(
-        "#!/usr/bin/env python3\n"
+        "#!/usr/bin/env -S python3 -S\n"
         "import json, os, sys\n"
         "base = os.environ['ANTHROPIC_BASE_URL']\n"
         "assert base == 'http://127.0.0.1:12345'\n"
@@ -223,7 +223,7 @@ def test_claude_code_sglang_backend_records_qwen_logprobs(tmp_path, monkeypatch)
 def test_claude_code_cli_args_skip_unsupported_max_turns(tmp_path, monkeypatch):
     fake_cli = tmp_path / "claude"
     fake_cli.write_text(
-        "#!/usr/bin/env python3\n"
+        "#!/usr/bin/env -S python3 -S\n"
         "import sys\n"
         "if '--help' in sys.argv:\n"
         "    print('Usage: claude -p --output-format --mcp-config --allowedTools')\n"
@@ -256,7 +256,7 @@ def test_claude_code_cli_args_skip_unsupported_max_turns(tmp_path, monkeypatch):
 def test_claude_code_cli_args_disable_local_builtin_tools_when_supported(tmp_path, monkeypatch):
     fake_cli = tmp_path / "claude"
     fake_cli.write_text(
-        "#!/usr/bin/env python3\n"
+        "#!/usr/bin/env -S python3 -S\n"
         "import sys\n"
         "if '--help' in sys.argv:\n"
         "    print('--bare --max-turns --tools --strict-mcp-config --no-session-persistence')\n"
@@ -295,7 +295,7 @@ def test_claude_code_cli_args_disable_local_builtin_tools_when_supported(tmp_pat
 def test_claude_code_sglang_uses_log_dir_and_bare_mode(tmp_path, monkeypatch):
     fake_cli = tmp_path / "claude"
     fake_cli.write_text(
-        "#!/usr/bin/env python3\n"
+        "#!/usr/bin/env -S python3 -S\n"
         "import sys\n"
         "if '--help' in sys.argv:\n"
         "    print('--bare --mcp-config --allowedTools')\n"
@@ -488,7 +488,7 @@ def test_claude_code_sglang_backend_bridges_qwen_tool_use(tmp_path, monkeypatch)
 
     fake_cli = tmp_path / "claude"
     fake_cli.write_text(
-        "#!/usr/bin/env python3\n"
+        "#!/usr/bin/env -S python3 -S\n"
         "import json, sys\n"
         "_ = sys.stdin.read()\n"
         "print(json.dumps({'result': 'done'}))\n",

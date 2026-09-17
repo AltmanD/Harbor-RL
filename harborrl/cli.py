@@ -17,12 +17,13 @@ from harborrl.config import ROOT, launch_plan, load_config
 
 def doctor(plan):
     checks = []
-    for package in ('ray', 'torch', 'sglang', 'transformers', 'megatron-core'):
+    for package in ('ray', 'torch', 'sglang', 'transformers'):
         try:
             version = importlib.metadata.version(package)
         except importlib.metadata.PackageNotFoundError:
             version = None
         checks.append({'dependency': package, 'version': version, 'ok': version is not None})
+    checks.append({'dependency': 'bundled Megatron-LM', 'ok': (ROOT / 'backends/Megatron-LM/megatron/core/__init__.py').is_file()})
     for key in ('HF_CKPT', 'REF_LOAD', 'ROLLOUT_PROMPT_DATA'):
         checks.append({'path': key, 'ok': Path(plan['environment'][key]).exists()})
     checks.append({'dependency': 'nvidia-smi', 'ok': shutil.which('nvidia-smi') is not None})
@@ -62,6 +63,8 @@ def main(argv=None):
         return 1
     run = Path(plan['config']['output']['root']) / 'training' / uuid.uuid4().hex
     run.mkdir(parents=True)
+    plan['environment'].update(RUN_DIR=str(run), RUN_ID=run.name, RUN_NAME=run.name)
+    plan['environment']['HARBOR_IR_ROOT'] = str(run / 'ir')
     def git(*args):
         return subprocess.check_output(['git', *args], cwd=ROOT)
     patch = git('diff', 'HEAD', '--', 'harborrl', 'backends', 'pyproject.toml')
