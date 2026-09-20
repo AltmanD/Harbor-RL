@@ -44,12 +44,19 @@ def doctor(plan):
             probe_env = dict(os.environ)
             probe_env.update(plan['environment'], LD_PRELOAD=str(preload))
             try:
+                if not preload.is_file():
+                    raise FileNotFoundError(f'missing memory saver preload library: {preload}')
                 probe = subprocess.run([sys.executable, '-c', 'import torch; print(torch.__version__)'],
                                        env=probe_env, capture_output=True, text=True, timeout=60)
                 checks.append({'dependency': 'memory saver CUDA preload ABI', 'ok': probe.returncode == 0,
                                'detail': (probe.stdout if probe.returncode == 0 else probe.stderr)[-1500:]})
             except subprocess.TimeoutExpired:
                 checks.append({'dependency': 'memory saver CUDA preload ABI', 'ok': False, 'detail': 'probe timed out'})
+            except OSError as exc:
+                checks.append({'dependency': 'memory saver CUDA preload ABI', 'ok': False, 'detail': str(exc)})
+        elif spec:
+            checks.append({'dependency': 'memory saver CUDA preload ABI', 'ok': False,
+                           'detail': 'cannot locate the memory saver preload library'})
     checks.append({'dependency': 'nvidia-smi', 'ok': shutil.which('nvidia-smi') is not None})
     if shutil.which('nvidia-smi'):
         try:

@@ -33,7 +33,7 @@ worker = [
   "uvicorn>=0.30",
 ]
 camel = ["camel-ai>=0.2"]
-claude = ["anthropic>=0.40"]
+claude = ["anthropic>=0.40", "mcp>=1.0,<2"]
 train = [
   "datasets>=3.0",
   "torch>=2.4",
