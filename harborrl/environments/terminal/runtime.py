@@ -104,6 +104,30 @@ def _docker_network_lifecycle_lock():
             fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
 
+def _align_toolkit_docker_client(toolkit: Any) -> None:
+    """Use the container lookup client's endpoint for Camel exec calls too.
+
+    Some Camel versions hardcode the default socket for their low-level client
+    while using docker.from_env() for container lookup. This breaks private
+    daemons and SSH-forwarded sockets.
+    """
+    client = getattr(toolkit, "docker_client", None)
+    api = getattr(client, "api", None)
+    previous = getattr(toolkit, "docker_api_client", None)
+    if api is None or previous is None or previous is api:
+        return
+    toolkit.docker_api_client = api
+    previous.close()
+    workdir = getattr(toolkit, "docker_workdir", None)
+    if workdir:
+        execution = api.exec_create(
+            toolkit.container.id, ["mkdir", "-p", "--", str(workdir)]
+        )
+        api.exec_start(execution["Id"])
+        if api.exec_inspect(execution["Id"]).get("ExitCode") != 0:
+            raise RuntimeError("Failed to initialize terminal Docker workdir")
+
+
 class _DockerCleanupDeadlineExceeded(TimeoutError):
     pass
 
@@ -2370,18 +2394,31 @@ class TerminalEnv:
                 self._trial_handler.trial_paths.sessions_path
                 / "terminal_toolkit_session_logs"
             )
+            harbor_workdir = None
+            if (self._task_meta or {}).get("data_source") == "harbor_terminal":
+                import docker
+
+                client = docker.from_env()
+                try:
+                    container = client.containers.get(
+                        self._trial_handler.client_container_name
+                    )
+                    harbor_workdir = container.attrs["Config"].get("WorkingDir") or "/"
+                finally:
+                    client.close()
             self._terminal_toolkit = TerminalToolkit(
                 timeout=20.0,
                 working_directory=(
                     "/testbed"
                     if is_swe_task_path(self._task_spec.task_path)
-                    else None
+                    else harbor_workdir
                 ),
                 use_docker_backend=True,
                 docker_container_name=self._trial_handler.client_container_name,
                 session_logs_dir=session_logs_dir,
                 safe_mode=False,
             )
+            _align_toolkit_docker_client(self._terminal_toolkit)
             self._tools = {
                 "shell_exec": self._terminal_toolkit.shell_exec,
                 "shell_view": self._terminal_toolkit.shell_view,
@@ -2394,6 +2431,11 @@ class TerminalEnv:
                 task_path=self._task_spec.task_path,
                 instruction=self._task_spec.instruction,
             )
+            if harbor_workdir is not None:
+                user_msg = (
+                    f"Environment working directory: {harbor_workdir}. "
+                    "Resolve relative task paths from this directory.\n" + user_msg
+                )
             function_tools = [FunctionTool(fn) for fn in self._tools.values()]
             tool_schemas = [
                 func_tool.get_openai_tool_schema() for func_tool in function_tools

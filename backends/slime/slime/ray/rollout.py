@@ -235,7 +235,19 @@ class RolloutManager:
         assert self.args.rollout_global_dataset
         return len(self.data_source.dataset) // self.args.rollout_batch_size
 
+    def verify_policy_pool(self, expected=None):
+        if os.getenv('HARBORRL_VERIFY_POLICY_POOL') != '1':
+            return
+        from harborrl.platform.policy_pool import publish_pool
+        engines = list(self.rollout_engines)
+        expected_count = self.args.rollout_num_gpus // self.args.rollout_num_gpus_per_engine
+        if len(engines) != expected_count or any(engine is None for engine in engines):
+            raise RuntimeError('policy pool has missing engines')
+        states = ray.get([engine.policy_state.remote() for engine in engines], timeout=90)
+        return publish_pool(states, expected)
+
     def generate(self, rollout_id):
+        self.verify_policy_pool()
         start_time = time.time()
         self.rollout_id = rollout_id
         if hasattr(self.data_source, "update_policy_version"):
@@ -351,6 +363,7 @@ class RolloutManager:
         if self.args.debug_train_only:
             # if debug train only, we don't generate evaluation data
             return
+        self.verify_policy_pool()
         self.health_monitoring_resume()
 
         result = call_rollout_fn(self.eval_generate_rollout, self.args, rollout_id, self.data_source, evaluation=True)
@@ -1187,6 +1200,12 @@ class RolloutManager:
     def _split_train_data_by_dp(self, data, dp_size):
         """Split the train data by data parallel size."""
         rollout_data = {}
+        if os.getenv('HARBORRL_VERIFY_POLICY_POOL') == '1' and dp_size > 1:
+            from harborrl.platform.dp_batch import pad_filtered_batch
+            batch_size = getattr(self, '_dynamic_global_batch_size', self.args.global_batch_size)
+            padding = pad_filtered_batch(data, batch_size)
+            logger.info('DP batch alignment after reward filtering: real=%d padding=%d global_batch=%d',
+                        len(data['tokens']) - padding, padding, batch_size)
 
         if "prompt" in data:
             rollout_data["prompt"] = data["prompt"]

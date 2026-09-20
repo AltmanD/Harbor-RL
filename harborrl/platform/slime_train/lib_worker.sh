@@ -59,7 +59,14 @@ if [[ "${NEEDS_ENV_ROUTER}" == "1" && -n "${WORKER_URLS}" ]]; then
 fi
 export WORKER_URLS WORKER_URLS_FILE WORKER_URLS_RELOAD_INTERVAL
 
-export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-max_split_size_mb:2048,expandable_segments:True}"
+if [[ "${HARBORRL_GPU_LAYOUT:-split}" == colocate ]]; then
+  export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-max_split_size_mb:2048}"
+  if [[ "${PYTORCH_CUDA_ALLOC_CONF}" == *"expandable_segments:True"* ]]; then
+    echo "colocate memory saver does not support expandable_segments"; exit 1
+  fi
+else
+  export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-max_split_size_mb:2048,expandable_segments:True}"
+fi
 if [[ -z "${MASTER_ADDR:-}" ]]; then
   MASTER_ADDR="$(hostname -I 2>/dev/null | awk '{print $1}' || true)"
   MASTER_ADDR="${MASTER_ADDR:-127.0.0.1}"

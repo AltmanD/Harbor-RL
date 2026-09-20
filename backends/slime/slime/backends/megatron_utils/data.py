@@ -1,4 +1,5 @@
 import logging
+import os
 from argparse import Namespace
 from collections.abc import Sequence
 
@@ -518,6 +519,26 @@ def get_data_iterator(
             args.max_tokens_per_gpu,
         )
 
+        if os.getenv('HARBORRL_VERIFY_POLICY_POOL') == '1':
+            # Local safety splitting must not change collective counts on
+            # only one DP rank. Split existing partitions (without duplicating
+            # samples) until every rank has the same count for each step.
+            aligned = torch.tensor(num_microbatches, dtype=torch.int, device=torch.cuda.current_device())
+            dist.all_reduce(aligned, op=dist.ReduceOp.MAX, group=dp_group)
+            rebuilt = []
+            offset = 0
+            for current, target in zip(num_microbatches, aligned.tolist(), strict=True):
+                partitions = micro_batch_indices[offset:offset + current]
+                offset += current
+                while len(partitions) < target:
+                    largest = max(range(len(partitions)), key=lambda i: len(partitions[i]))
+                    indices = partitions[largest]
+                    if len(indices) < 2:
+                        raise RuntimeError('cannot align DP microbatches without duplicating samples')
+                    partitions[largest:largest + 1] = [indices[:1], indices[1:]]
+                rebuilt.extend(partitions)
+            micro_batch_indices = rebuilt
+            num_microbatches = aligned.tolist()
         data_iterator = _generate_data_iterator(rollout_data, None, micro_batch_indices)
 
     return (

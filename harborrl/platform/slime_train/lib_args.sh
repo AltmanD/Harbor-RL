@@ -47,6 +47,14 @@ else
   fi
   MAX_TOKENS_PER_GPU="${MAX_TOKENS_PER_GPU:-16384}"
 fi
+if [[ "${HARBORRL_STRUCTURED_LAUNCH:-0}" == "1" ]]; then
+  actor_dp=$((ACTOR_GPUS / TP_SIZE))
+  initial_batch=$((ROLLOUT_BATCH_SIZE * N_SAMPLES / 2))
+  if (( initial_batch < actor_dp || initial_batch % actor_dp != 0 )); then
+    echo "[ERROR] initial global batch (${ROLLOUT_BATCH_SIZE} * ${N_SAMPLES} / 2 = ${initial_batch}) must be divisible by actor DP=${actor_dp}; adjust ROLLOUT_BATCH_SIZE or N_SAMPLES" >&2
+    exit 1
+  fi
+fi
 ROLLOUT_MAX_RESPONSE_LEN="${ROLLOUT_MAX_RESPONSE_LEN:-8192}"
 ROLLOUT_MAX_CONTEXT_LEN="${ROLLOUT_MAX_CONTEXT_LEN:-16384}"
 ROLLOUT_GENERATION_MAX_RETRIES="${ROLLOUT_GENERATION_MAX_RETRIES:-3}"
@@ -325,7 +333,13 @@ else
   echo "WARN: custom config not found at ${CUSTOM_CONFIG_PATH}; skipping --custom-config-path"
 fi
 
+LAYOUT_ARGS=()
+if [[ "${HARBORRL_GPU_LAYOUT}" == colocate ]]; then
+  LAYOUT_ARGS+=(--colocate --offload-train --offload-rollout)
+fi
+
 TRAIN_ARGS=(
+  "${LAYOUT_ARGS[@]}"
   --actor-num-nodes "${ACTOR_NUM_NODES:-1}"
   --num-gpus-per-node "${NUM_GPUS}"
   --actor-num-gpus-per-node "${ACTOR_GPUS}"

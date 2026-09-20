@@ -2,11 +2,28 @@
 ROUTER_PID=""
 cleanup() {
   set +e
+  if [[ "${HARBORRL_STRUCTURED_LAUNCH:-0}" == "1" && "${RAY_STATUS_STATE:-}" != "unknown" ]]; then
+    timeout 120 "${TRAIN_PYTHON}" -m harborrl.platform.run_leases || true
+  fi
   if [[ -n "${ROUTER_PID}" ]] && kill -0 "${ROUTER_PID}" 2>/dev/null; then
     kill "${ROUTER_PID}" || true
   fi
 }
-trap cleanup EXIT INT TERM
+cancel_run() {
+  trap '' INT TERM
+  RAY_STATUS_STATE="cancelled"
+  if [[ -n "${RAY_LOG_PID:-}" ]]; then
+    kill "${RAY_LOG_PID}" 2>/dev/null || true
+  fi
+  if [[ -n "${RAY_JOB_SUBMISSION_ID:-}" ]]; then
+    # Stop only the job submitted by this launcher; shared services stay up.
+    timeout 45 ray job stop --address="http://${MASTER_ADDR}:8265" "${RAY_JOB_SUBMISSION_ID}" || true
+  fi
+  exit "$1"
+}
+trap cleanup EXIT
+trap 'cancel_run 130' INT
+trap 'cancel_run 143' TERM
 
 ROUTER_LOG="${RUN_LOG_DIR}/router.log"
 require_cmd curl
@@ -500,6 +517,9 @@ fi
 # defaults and deadlock against the head in mismatched collectives.
 EXTRA_ENV_PASSTHROUGH_JSON=""
 for _passthrough_var in \
+  HARBORRL_VERIFY_POLICY_POOL \
+  HARBORRL_GPU_LAYOUT \
+  LD_LIBRARY_PATH \
   HARBOR_IR_ROOT \
   HARBOR_LOGPROB_SOURCE \
   HARBOR_LOGPROB_SEMANTICS \
@@ -800,8 +820,11 @@ if [[ "${RAY_SUBMIT_XTRACE_WAS_ON}" == "1" ]]; then
 fi
 
 set +e
-ray job logs --address="http://${MASTER_ADDR}:8265" "${RAY_JOB_SUBMISSION_ID}" -f --log-style=record
+ray job logs --address="http://${MASTER_ADDR}:8265" "${RAY_JOB_SUBMISSION_ID}" -f --log-style=record &
+RAY_LOG_PID=$!
+wait "${RAY_LOG_PID}"
 RAY_LOG_EXIT=$?
+RAY_LOG_PID=""
 RAY_STATUS_OUTPUT=""
 RAY_STATUS_STATE="unknown"
 RAY_STATUS_RETRIES="${RAY_JOB_STATUS_RETRIES:-12}"
@@ -819,7 +842,7 @@ for ((status_attempt = 1; status_attempt <= RAY_STATUS_RETRIES; status_attempt++
     RAY_STATUS_STATE="succeeded"
     break
   fi
-  if [[ ( "${RAY_STATUS_LOWER}" == *"status for job"* || "${RAY_STATUS_LOWER}" == *"job '${RAY_JOB_SUBMISSION_ID}' failed"* || "${RAY_STATUS_LOWER}" == *"job '${RAY_JOB_SUBMISSION_ID}' stopped"* ) && ( "${RAY_STATUS_LOWER}" == *"failed"* || "${RAY_STATUS_LOWER}" == *"stopped"* ) ]]; then
+  if [[ ( "${RAY_STATUS_LOWER}" == *"status for job"* || "${RAY_STATUS_LOWER}" == *"job '${RAY_JOB_SUBMISSION_ID}' failed"* || "${RAY_STATUS_LOWER}" == *"job '${RAY_JOB_SUBMISSION_ID}' stopped"* || "${RAY_STATUS_LOWER}" == *"job '${RAY_JOB_SUBMISSION_ID}' was stopped"* ) && ( "${RAY_STATUS_LOWER}" == *"failed"* || "${RAY_STATUS_LOWER}" == *"stopped"* ) ]]; then
     RAY_STATUS_STATE="failed"
     break
   fi

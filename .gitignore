@@ -74,3 +74,19 @@ swe.pem
 /interview/
 /file
 /=*
+
+# Personal development notes and historical site-specific experiment launchers.
+/docs/HarborRL_0.5MVP_20260920.md
+/docs/HarborRL_next_steps_20260920_zh.md
+/docs/architecture/
+/docs/experiments/
+/docs/h/
+/docs/integration/
+/scripts/rjob.sh
+/scripts/h200_update_probe.py
+/scripts/harbor_six_rt_update_probe.py
+/update_probe.py
+
+# Local 0.5 MVP dataset snapshot, reproduction notes, and snapshot exporter.
+/benchmarks/harbor/0.5-mvp/
+/tools/dev/freeze_harbor_baseline.py

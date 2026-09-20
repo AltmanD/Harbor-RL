@@ -40,12 +40,20 @@ ROLLOUT_GPUS="${ROLLOUT_GPUS:-${HALF_GPUS}}"
 ROLLOUT_NUM_GPUS_PER_ENGINE="${ROLLOUT_NUM_GPUS_PER_ENGINE:-${HALF_GPUS}}"
 TP_SIZE="${TP_SIZE:-${ACTOR_GPUS}}"
 
-# Per-node budget check.  With ACTOR_NUM_NODES>1 the actor spans several nodes
-# (TP across nodes) and ROLLOUT_GPUS counts the cluster-wide engine GPUs, so
-# the single-node sum check does not apply; colocate further overlaps the two.
-if [[ "${ACTOR_NUM_NODES:-1}" -le 1 ]] && (( ACTOR_GPUS + ROLLOUT_GPUS > NUM_GPUS )); then
-  echo "ACTOR_GPUS(${ACTOR_GPUS}) + ROLLOUT_GPUS(${ROLLOUT_GPUS}) > NUM_GPUS(${NUM_GPUS})"
-  exit 1
+HARBORRL_GPU_LAYOUT="${HARBORRL_GPU_LAYOUT:-split}"
+case "${HARBORRL_GPU_LAYOUT}" in
+  split)
+    if [[ "${ACTOR_NUM_NODES:-1}" -le 1 ]] && (( ACTOR_GPUS + ROLLOUT_GPUS > NUM_GPUS )); then
+      echo "actor + rollout GPU count exceeds split budget"; exit 1
+    fi ;;
+  colocate)
+    if [[ "${ACTOR_NUM_NODES:-1}" != 1 ]] || (( ACTOR_GPUS != NUM_GPUS || ROLLOUT_GPUS != NUM_GPUS )); then
+      echo "colocate requires a single node and actor = rollout = GPU budget"; exit 1
+    fi ;;
+  *) echo "Unknown GPU layout: ${HARBORRL_GPU_LAYOUT}"; exit 1 ;;
+esac
+if (( TP_SIZE <= 0 || ROLLOUT_NUM_GPUS_PER_ENGINE <= 0 || ACTOR_GPUS % TP_SIZE || ROLLOUT_GPUS % ROLLOUT_NUM_GPUS_PER_ENGINE )); then
+  echo "Invalid GPU parallelism divisibility"; exit 1
 fi
 log "GPU config: total=${NUM_GPUS}, actor=${ACTOR_GPUS}, rollout=${ROLLOUT_GPUS}, TP=${TP_SIZE}, engine_tp=${ROLLOUT_NUM_GPUS_PER_ENGINE}"
 
