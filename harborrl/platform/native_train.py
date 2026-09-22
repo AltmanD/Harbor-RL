@@ -107,9 +107,12 @@ def doctor(plan):
     runtime_env["PYTHONPATH"] = runtime_pythonpath
     for module in ("megatron.bridge", "mbridge", "slime_plugins.megatron_bridge",
                    "modelopt.torch.distill.plugins.megatron"):
-        probe = subprocess.run([sys.executable, "-c", f"import {module}"],
-                               capture_output=True, text=True, timeout=30, check=False,
-                               env=runtime_env)
+        try:
+            probe = subprocess.run([sys.executable, "-c", f"import {module}"],
+                                   capture_output=True, text=True, timeout=90, check=False,
+                                   env=runtime_env)
+        except (subprocess.SubprocessError, OSError) as exc:
+            probe = SimpleNamespace(returncode=1, stdout="", stderr=str(exc))
         checks.append({"dependency": module, "ok": probe.returncode == 0,
                        "detail": probe.stderr.strip()[-1000:]})
 
