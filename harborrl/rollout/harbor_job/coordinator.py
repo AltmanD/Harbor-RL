@@ -92,7 +92,7 @@ async def run_attempt(identity, *, task_path, profile, gateway_url, runner_pytho
         stderr.close()
         publish(root / "launch-failed.json", {"identity": identity.to_dict(), "reason": "Runner process did not start"})
         raise
-    registered, trial_id = False, None
+    registered, trial_id, lifecycle_timeout = False, None, False
     messages = []
     try:
         req = {"identity": identity.to_dict(), "task_path": str(Path(task_path).resolve()), "profile": profile,
@@ -146,6 +146,7 @@ async def run_attempt(identity, *, task_path, profile, gateway_url, runner_pytho
         publish(root / "trajectory.v2.json", ir)
         return ir
     except BaseException as exc:
+        lifecycle_timeout = isinstance(exc, (asyncio.TimeoutError, asyncio.CancelledError))
         publish(root / "failure.json", {"identity": identity.to_dict(), "error_type": type(exc).__name__})
         raise
     finally:
@@ -164,7 +165,7 @@ async def run_attempt(identity, *, task_path, profile, gateway_url, runner_pytho
                 await process.wait()
                 publish(root / "cleanup-required.json", {"identity": identity.to_dict(), "trial_id": trial_id,
                     "reason": "Runner cleanup deadline exceeded; inspect Harbor resources before retry"})
-        if process.returncode != 0 and not (root / "cleanup-required.json").exists():
+        if (process.returncode != 0 or lifecycle_timeout) and not (root / "cleanup-required.json").exists():
             publish(root / "cleanup-required.json", {"identity": identity.to_dict(), "trial_id": trial_id,
                 "reason": "Runner exited abnormally; inspect Harbor resources before retry"})
         if registered:

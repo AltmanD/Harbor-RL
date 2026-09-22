@@ -108,14 +108,14 @@ sys.stdin.readline()
     }[mode])
     spawn = asyncio.create_subprocess_exec
     async def fake_spawn(*args, **kwargs):
-        return await spawn(sys.executable, str(worker), **kwargs)
+        return await spawn(sys.executable, "-S", str(worker), **kwargs)
     monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_spawn)
     registry = TraceRegistry(tmp_path / "traces")
     root = tmp_path / "attempt"
     with pytest.raises((RuntimeError, ValueError, asyncio.TimeoutError)):
         asyncio.run(run_attempt(identity(), task_path=tmp_path, profile=PROFILE,
             gateway_url="http://gateway", runner_python=sys.executable, root=root,
-            registry=registry, reward_profile=RewardProfile(), timeout=2 if mode == "timeout" else None, cleanup_timeout=.5))
+            registry=registry, reward_profile=RewardProfile(), timeout=2, cleanup_timeout=.5))
     assert registry.attempts[identity().attempt_id]["closed"]
     assert (root / "failure.json").is_file()
     if mode != "wrong-event":
