@@ -106,7 +106,11 @@ if (( MAX_CKPT_KEEP > 0 )); then
 else
   SAVE_CKPT=""
 fi
-RESUME_LOAD="${RESUME_LOAD:-${SAVE_CKPT}}"
+if [[ "${HARBORRL_NATIVE_ROLLOUT:-0}" == "1" ]]; then
+  RESUME_LOAD="${RESUME_LOAD:-}"
+else
+  RESUME_LOAD="${RESUME_LOAD:-${SAVE_CKPT}}"
+fi
 
 # Pre-flight: check the filesystem that will actually receive checkpoints.
 # CKPT_ROOT may intentionally override the legacy EXPORT_ROOT default; probing

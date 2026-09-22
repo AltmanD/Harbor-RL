@@ -40,6 +40,17 @@ def load_config(path, overrides=()):
     config = yaml.safe_load(path.read_text())
     if not isinstance(config, dict):
         raise ValueError('configuration must be a mapping')
+    if config.get("schema_version") == 2:
+        from .native import FIELDS as native_fields, validate
+        validate(config, path)
+        for override in overrides:
+            key, sep, value = override.partition("=")
+            parts = key.split(".")
+            if (not sep or len(parts) != 2 or parts[0] not in native_fields
+                    or parts[1] not in native_fields[parts[0]] or not isinstance(config.get(parts[0]), dict)):
+                raise ValueError(f"unknown native override: {key}")
+            config[parts[0]][parts[1]] = yaml.safe_load(value)
+        return validate(config, path)
     for override in overrides:
         key, sep, value = override.partition('=')
         parts = key.split('.')
@@ -127,6 +138,9 @@ def load_config(path, overrides=()):
 
 
 def launch_plan(config):
+    if config.get("schema_version") == 2:
+        from .native import launch_plan as native_plan
+        return native_plan(config)
     c = config
     env = {
         'DATASET': 'harbor_terminal', 'ALGO': 'grpo',

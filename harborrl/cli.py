@@ -104,6 +104,9 @@ def main(argv=None):
     if args.dry_run:
         print(json.dumps(plan, indent=2))
         return 0
+    if plan["config"].get("schema_version") == 2:
+        from harborrl.platform.native_train import dispatch
+        return dispatch(plan, doctor_only=args.command == "doctor")
     checks = doctor(plan)
     if args.command == 'doctor':
         print(json.dumps({'checks': checks, 'scope': 'dependencies, preload ABI, GPU budget and worker readiness; full memory capacity and model execution require runtime validation'}, indent=2))

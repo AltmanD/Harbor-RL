@@ -83,7 +83,7 @@ esac
 export ALGO
 DATASET="$(normalize_dataset "${DATASET:-mixed}")"
 case "${DATASET}" in
-  seta|safety|agentharm|mixed|swesmith|harbor_terminal) ;;
+  native|seta|safety|agentharm|mixed|swesmith|harbor_terminal) ;;
   *)
     echo "[ERROR] Unknown DATASET=${DATASET}. Use: seta|safety|agentharm|mixed|swesmith|harbor_terminal"
     exit 1
@@ -100,6 +100,9 @@ HARNESS_OPTION="${HARNESS_OPTION:-camel-agent}"
 case "${HARNESS_OPTION}" in
   camel-agent|camel_agent)
     HARNESS_OPTION="camel-agent"
+    ;;
+  native-claude-code)
+    HARNESS_OPTION="native-claude-code"
     ;;
   claude-code|claude_code)
     HARNESS_OPTION="claude-code"

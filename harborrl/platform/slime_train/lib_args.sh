@@ -8,6 +8,9 @@ CKPT_ARGS=(
   --ref-load "${REF_LOAD}"
   --rotary-base 1000000
 )
+if [[ "${HARBORRL_NATIVE_ROLLOUT:-0}" == "1" ]]; then
+  CKPT_ARGS+=(--megatron-to-hf-mode bridge)
+fi
 # Only add --save / --load / --save-interval when checkpointing is enabled
 if [[ -n "${SAVE_CKPT}" ]]; then
   CKPT_ARGS+=(
@@ -25,7 +28,11 @@ if [[ -n "${SAVE_CKPT}" ]]; then
     CKPT_ARGS+=(--checkpoint-save-fatal)
   fi
 fi
-if [[ -n "${RESUME_LOAD}" ]]; then
+if [[ "${HARBORRL_NATIVE_ROLLOUT:-0}" == "1" && -z "${RESUME_LOAD:-}" ]]; then
+  # Bridge mode must load the locked HF checkpoint on the first run.  The save
+  # directory is intentionally not a valid resume source until iteration 1.
+  CKPT_ARGS+=(--load "${HF_CKPT}")
+elif [[ -n "${RESUME_LOAD}" ]]; then
   CKPT_ARGS+=(--load "${RESUME_LOAD}")
 fi
 
@@ -47,7 +54,7 @@ else
   fi
   MAX_TOKENS_PER_GPU="${MAX_TOKENS_PER_GPU:-16384}"
 fi
-if [[ "${HARBORRL_STRUCTURED_LAUNCH:-0}" == "1" ]]; then
+if [[ "${HARBORRL_STRUCTURED_LAUNCH:-0}" == "1" && "${HARBORRL_NATIVE_ROLLOUT:-0}" != "1" ]]; then
   actor_dp=$((ACTOR_GPUS / TP_SIZE))
   initial_batch=$((ROLLOUT_BATCH_SIZE * N_SAMPLES / 2))
   if (( initial_batch < actor_dp || initial_batch % actor_dp != 0 )); then
@@ -57,7 +64,7 @@ if [[ "${HARBORRL_STRUCTURED_LAUNCH:-0}" == "1" ]]; then
 fi
 ROLLOUT_MAX_RESPONSE_LEN="${ROLLOUT_MAX_RESPONSE_LEN:-8192}"
 ROLLOUT_MAX_CONTEXT_LEN="${ROLLOUT_MAX_CONTEXT_LEN:-16384}"
-ROLLOUT_GENERATION_MAX_RETRIES="${ROLLOUT_GENERATION_MAX_RETRIES:-3}"
+ROLLOUT_GENERATION_MAX_RETRIES="${ROLLOUT_GENERATION_MAX_RETRIES:-$([[ "${HARBORRL_NATIVE_ROLLOUT:-0}" == "1" ]] && echo 0 || echo 3)}"
 ROLLOUT_GENERATION_RETRY_INITIAL_BACKOFF="${ROLLOUT_GENERATION_RETRY_INITIAL_BACKOFF:-60}"
 ROLLOUT_GENERATION_RETRY_MAX_BACKOFF="${ROLLOUT_GENERATION_RETRY_MAX_BACKOFF:-300}"
 ROLLOUT_GENERATION_RETRY_BACKOFF_MULTIPLIER="${ROLLOUT_GENERATION_RETRY_BACKOFF_MULTIPLIER:-2.0}"
@@ -75,7 +82,7 @@ ROLLOUT_ARGS=(
   --rollout-max-response-len "${ROLLOUT_MAX_RESPONSE_LEN}"
   --rollout-max-context-len "${ROLLOUT_MAX_CONTEXT_LEN}"
   --rollout-temperature "${ROLLOUT_TEMPERATURE:-1}"
-  --num-steps-per-rollout 2
+  --num-steps-per-rollout "${NUM_STEPS_PER_ROLLOUT:-$([[ "${HARBORRL_NATIVE_ROLLOUT:-0}" == "1" ]] && echo 1 || echo 2)}"
   --balance-data
   --rollout-generation-max-retries "${ROLLOUT_GENERATION_MAX_RETRIES}"
   --rollout-generation-retry-initial-backoff "${ROLLOUT_GENERATION_RETRY_INITIAL_BACKOFF}"
@@ -141,11 +148,12 @@ PERF_ARGS=(
 
 GRPO_ARGS=(
   --advantage-estimator grpo
-  --dynamic_history
-  --use-kl-loss
-  --kl-loss-coef 0.01
-  --kl-loss-type k3
 )
+if [[ "${HARBORRL_NATIVE_ROLLOUT:-0}" != "1" ]]; then
+  GRPO_ARGS+=(--dynamic_history --use-kl-loss --kl-loss-coef 0.01 --kl-loss-type k3)
+else
+  GRPO_ARGS+=(--use-rollout-logprobs --disable-grpo-std-normalization)
+fi
 
 DAPO_EPS_CLIP_LOW="${DAPO_EPS_CLIP_LOW:-0.2}"
 DAPO_EPS_CLIP_HIGH="${DAPO_EPS_CLIP_HIGH:-0.28}"
@@ -222,7 +230,7 @@ OPTIMIZER_ARGS=(
   --optimizer adam
   --lr 1e-6
   --lr-decay-style constant
-  --weight-decay 0.1
+  --weight-decay $([[ "${HARBORRL_NATIVE_ROLLOUT:-0}" == "1" ]] && echo 0.0 || echo 0.1)
   --adam-beta1 0.9
   --adam-beta2 0.98
   --clip-grad 1.0
@@ -316,10 +324,19 @@ MISC_ARGS=(
 )
 
 CUSTOM_ARGS=(
-  --custom-generate-function-path harborrl.rollout.entrypoint.generate
   --custom-rollout-log-function-path harborrl.misc.rollout_log.rollout_log
   --custom-eval-rollout-log-function-path harborrl.misc.rollout_log.eval_rollout_log
 )
+if [[ "${HARBORRL_NATIVE_ROLLOUT:-0}" != "1" ]]; then
+  CUSTOM_ARGS+=(--custom-generate-function-path harborrl.rollout.entrypoint.generate)
+fi
+if [[ "${HARBORRL_NATIVE_ROLLOUT:-0}" == "1" ]]; then
+  CUSTOM_ARGS+=(
+    --loss-type custom_loss
+    --custom-loss-function-path harborrl.rollout.exporters.native_slime.loss_function
+    --custom-convert-samples-to-train-data-path harborrl.rollout.exporters.native_slime.convert_samples
+  )
+fi
 if [[ "${EXPLORE_ADVANTAGE_BONUS_ENABLED}" == "1" ]]; then
   # Keep the historical hook as the default, while allowing a cluster-job variant to
   # test a drop-in post-process fix without forking this large launcher.

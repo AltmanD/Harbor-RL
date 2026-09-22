@@ -289,6 +289,9 @@ MIX_MODE="${MIX_MODE:-all_visible}"
 export MIX_MODE
 
 case "${DATASET}" in
+  native)
+    : "${ROLLOUT_PROMPT_DATA:?Set ROLLOUT_PROMPT_DATA to a materialized native catalog}"
+    ;;
   harbor_terminal)
     : "${ROLLOUT_PROMPT_DATA:?Set ROLLOUT_PROMPT_DATA to a verified Harbor catalog}"
     ;;
@@ -380,7 +383,7 @@ case "${DATASET}" in
     ROLLOUT_PROMPT_DATA="${ROLLOUT_PROMPT_DATA:-${MIXED_DATA}}"
     ;;
   *)
-    echo "[ERROR] Unknown DATASET=${DATASET}. Use: seta|safety|agentharm|mixed|swesmith"
+    echo "[ERROR] Unknown DATASET=${DATASET}. Use: native|harbor_terminal|seta|safety|agentharm|mixed|swesmith"
     exit 1
     ;;
 esac

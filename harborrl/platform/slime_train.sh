@@ -60,6 +60,7 @@ CUSTOM_CONFIG_PATH="${CUSTOM_CONFIG_PATH:-${REPO_ROOT}/configs/rollout/rollout_q
 # running the old single file.
 _SLIME_TRAIN_LIB_DIR="${PLATFORM_DIR}/slime_train"
 source "${_SLIME_TRAIN_LIB_DIR}/lib_bootstrap.sh"    # conda env, process cleanup, GPU split, remaining run paths
+source "${_SLIME_TRAIN_LIB_DIR}/lib_json.sh"         # safe runtime-env JSON helpers
 source "${_SLIME_TRAIN_LIB_DIR}/lib_run_dir.sh"      # dataset/algo tags, unified run dir, claude-code preflight
 source "${_SLIME_TRAIN_LIB_DIR}/lib_rollout_cfg.sh"  # rollout knobs, log mirroring, model args
 source "${_SLIME_TRAIN_LIB_DIR}/lib_dataset.sh"      # dataset & reward config, agentharm/swesmith provisioning
