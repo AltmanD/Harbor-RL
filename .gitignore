@@ -90,3 +90,6 @@ swe.pem
 # Local 0.5 MVP dataset snapshot, reproduction notes, and snapshot exporter.
 /benchmarks/harbor/0.5-mvp/
 /tools/dev/freeze_harbor_baseline.py
+.venv-harbor-0.23/
+.tools/
+/probe.sh

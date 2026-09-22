@@ -1,6 +1,7 @@
 import json
 import threading
 from urllib import request, error
+from types import SimpleNamespace
 
 import pytest
 
@@ -57,6 +58,27 @@ def test_tool_roundtrip():
     p["messages"][-1]["content"][0]["tool_use_id"] = "other"
     with pytest.raises(ProtocolError, match="orphan"):
         convert(p, model="policy")
+
+
+def test_claude_2_1_220_control_turns_are_accepted_without_hidden_sampling():
+    converted = convert(payload(
+        output_config={"effort": "high"},
+        thinking={"type": "adaptive"},
+        context_management={"edits": [{"type": "clear_thinking_20251015", "keep": "all"}]},
+        system=[{"type": "text", "text": "locked system prompt"}],
+        messages=[
+            {"role": "user", "content": "run"},
+            {"role": "system", "content": [{"type": "text", "text": "session update",
+                                            "cache_control": {"type": "ephemeral"}}]},
+        ]), model="policy")
+    assert converted["messages"][0] == {"role": "system", "content": "locked system prompt"}
+    assert converted["messages"][1] == {"role": "user", "content": "run"}
+    assert converted["messages"][2] == {"role": "system", "content": "session update"}
+    assert converted["sampling"]["temperature"] == 1
+    with pytest.raises(ProtocolError, match="thinking"):
+        convert(payload(thinking={"type": "enabled", "budget_tokens": 1}), model="policy")
+    with pytest.raises(ProtocolError, match="context management"):
+        convert(payload(context_management={"edits": []}), model="policy")
 
 
 @pytest.mark.parametrize("text", ['<tool_call>{broken}</tool_call>', '<tool_call>{}', '<think>x</think>', '<tool_call>{"name":"unknown","arguments":{}}</tool_call>'])
@@ -129,8 +151,11 @@ def test_http_sse_and_auth(tmp_path):
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     url = f"http://127.0.0.1:{server.server_port}/v1/messages"
+    ready_url = f"http://127.0.0.1:{server.server_port}/readyz"
     opener = request.build_opener(request.ProxyHandler({}))
     try:
+        with opener.open(ready_url, timeout=5) as response:
+            assert json.load(response) == {"ok": True, "model": "policy"}
         req = request.Request(url, json.dumps(payload(stream=True)).encode(), {"x-api-key": token})
         with opener.open(req, timeout=5) as response:
             events = [json.loads(line[6:]) for line in response.read().decode().splitlines() if line.startswith("data: ")]
@@ -140,6 +165,10 @@ def test_http_sse_and_auth(tmp_path):
         with pytest.raises(error.HTTPError) as exc:
             opener.open(request.Request(url, b'{}', {"x-api-key": "bad"}), timeout=5)
         assert exc.value.code == 401
+        query = request.Request(url + "?beta=true", json.dumps(payload()).encode(),
+                                {"x-api-key": token})
+        with opener.open(query, timeout=5) as response:
+            assert json.load(response)["role"] == "assistant"
     finally:
         server.shutdown()
         server.server_close()
@@ -172,6 +201,8 @@ def test_sglang_generation_version_and_logprob_evidence():
     class Tokenizer:
         def apply_chat_template(self, *args, **kwargs):
             return [11, 12]
+        def decode(self, token_ids, skip_special_tokens):
+            return "done"
     backend = SGLangBackend("http://engine", Tokenizer(), tokenizer_digest="tok", template_digest="tpl")
     converted = convert(payload(), model="policy")
     serving = {"input_ids": backend.prepare(converted)}
@@ -187,6 +218,39 @@ def test_sglang_generation_version_and_logprob_evidence():
     output["meta_info"]["output_token_logprobs"] = [[None, 13]]
     with pytest.raises(ValueError, match="logprobs"):
         backend.decode(output, serving, converted, identity(), "msg")
+    output["meta_info"]["output_token_logprobs"] = [[-.2, 13]]
+    output["output_ids"] = [14]
+    with pytest.raises(ValueError, match="token IDs"):
+        backend.decode(output, serving, converted, identity(), "msg")
+    output["output_ids"] = [13]
+    output["text"] = "different"
+    with pytest.raises(ValueError, match="text"):
+        backend.decode(output, serving, converted, identity(), "msg")
     backend.max_context = 10
     with pytest.raises(ProtocolError, match="context"):
         backend.prepare(converted)
+
+
+def test_sglang_weight_version_is_explicit():
+    from harborrl.gateway.sglang_backend import SGLangBackend
+
+    class Response:
+        def read(self):
+            return json.dumps({"weight_version": "7"}).encode()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    class Opener:
+        def open(self, request, timeout):
+            assert request.full_url == "http://engine/get_weight_version"
+            assert timeout == 30
+            return Response()
+
+    backend = SGLangBackend("http://engine", SimpleNamespace(), tokenizer_digest="tok",
+                            template_digest="tpl", timeout=30)
+    backend.opener = Opener()
+    assert backend.weight_version() == "7"

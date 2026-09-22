@@ -2,6 +2,16 @@
 
 ## 架构与配置
 
+- [Harbor Gateway 最终 MVP 设计](integration/harbor_gateway_mvp_final_zh.md)——
+  Harbor 原生执行，Terminus2 / Claude Code / Codex / OpenHands 四 harness、Gateway 三协议、统一 reward 与训练验收；后续完整 MVP 的设计基线。
+- [native_mvp_fullchain_readiness_zh.md](native_mvp_fullchain_readiness_zh.md)——native MVP 真实训练前的 GPU/CPU worker、task lock、CLI、镜像、doctor 与 Go/No-Go 清单。
+- [native_mvp_gpu_result_zh.md](native_mvp_gpu_result_zh.md)——2026-09-22
+  8×H200 首次真实全链路成功结果、验收矩阵、checkpoint 重载与清理状态。
+- [native_mvp_reward_contrast_result_zh.md](native_mvp_reward_contrast_result_zh.md)——
+  2026-09-22 最终 reward 0/1 对比、非零 advantage/gradient/PG loss、显式
+  权重变化与 updated checkpoint 重载证据；Native MVP 验收闭环。
+- [native_cpu_development_zh.md](native_cpu_development_zh.md)——原生 Claude Code
+  CPU/契约开发边界、schema 2 入口、Slime 训练契约测试与 GPU 验证记录。
 - [architecture.md](architecture.md)——包边界、主链路与扩展点（环境注册表、
   env 解析、训练三层入口)。
 - [configuration.md](configuration.md)——recipe 即配置；`harborrl/env.py`

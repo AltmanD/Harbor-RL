@@ -37,6 +37,8 @@ def test_restart_cannot_reopen_persisted_attempt(tmp_path):
 def test_profile_controls_reach_agent_and_host():
     config = claude_config(PROFILE, "http://gateway:8000", "token")
     assert config["env"]["DISABLE_AUTO_COMPACT"] == "1"
+    assert config["env"]["NO_PROXY"] == "gateway"
+    assert config["env"]["no_proxy"] == "gateway"
     assert config["kwargs"]["version"] == "2.1.0"
     assert sanitized_runner_env({"PATH": "/bin", "ANTHROPIC_API_KEY": "external", "HTTPS_PROXY": "external"})["PATH"] == "/bin"
     assert "ANTHROPIC_API_KEY" not in sanitized_runner_env({"ANTHROPIC_API_KEY": "external"})
@@ -64,6 +66,22 @@ def test_retry_budget_and_new_lineage():
         group.export()
     with pytest.raises(ValueError, match="slots"):
         GroupSlots([identity(), replace(identity(), slot_id="1")])
+
+
+def test_runner_can_be_dispatched_to_external_worker():
+    from harborrl.rollout.harbor_job.coordinator import runner_command
+    local = runner_command("/opt/python", "/repo")
+    remote = runner_command("/opt/python", "/re po", "worker-a")
+    assert local == ["/opt/python", "-m", "harborrl.rollout.harbor_job.runner"]
+    assert remote == ["ssh", "-o", "BatchMode=yes", "-o", "ClearAllForwardings=yes",
+                      "-o", "StrictHostKeyChecking=accept-new", "worker-a",
+                      "cd '/re po' && exec /opt/python -m harborrl.rollout.harbor_job.runner"]
+
+
+def test_real_runner_source_compiles():
+    import py_compile
+    from harborrl.rollout.harbor_job import runner
+    py_compile.compile(runner.__file__, doraise=True)
 
 
 def test_runner_launch_failure_is_recorded(tmp_path):
@@ -97,7 +115,7 @@ sys.stdin.readline()
     with pytest.raises((RuntimeError, ValueError, asyncio.TimeoutError)):
         asyncio.run(run_attempt(identity(), task_path=tmp_path, profile=PROFILE,
             gateway_url="http://gateway", runner_python=sys.executable, root=root,
-            registry=registry, reward_profile=RewardProfile(), timeout=.5, cleanup_timeout=.1))
+            registry=registry, reward_profile=RewardProfile(), timeout=2 if mode == "timeout" else None, cleanup_timeout=.5))
     assert registry.attempts[identity().attempt_id]["closed"]
     assert (root / "failure.json").is_file()
     if mode != "wrong-event":
