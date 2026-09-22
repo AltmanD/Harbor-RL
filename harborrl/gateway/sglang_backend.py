@@ -32,6 +32,15 @@ class SGLangBackend:
     def count_tokens(self, converted):
         return len(self.prepare(converted))
 
+    def weight_version(self):
+        req = request.Request(self.endpoint + "/get_weight_version")
+        with self.opener.open(req, timeout=self.timeout) as response:
+            payload = json.load(response)
+        version = payload.get("weight_version")
+        if not isinstance(version, str) or not version.strip():
+            raise ValueError("missing serving weight version")
+        return version
+
     def generate(self, converted, identity, response_id):
         ids = self.prepare(converted)
         payload = {"input_ids": ids, "sampling_params": converted["sampling"],
@@ -55,6 +64,13 @@ class SGLangBackend:
         text = output.get("text")
         if not isinstance(text, str):
             raise ValueError("missing generation text")
+        output_ids = [row[1] for row in rows]
+        reported_ids = output.get("output_ids")
+        if reported_ids is not None and reported_ids != output_ids:
+            raise ValueError("serving output token IDs disagree with logprob evidence")
+        decoded = self.tokenizer.decode(output_ids, skip_special_tokens=True)
+        if not decoded.startswith(text) and not text.startswith(decoded.rstrip("\n")):
+            raise ValueError("serving text disagrees with output token IDs")
         finish = meta.get("finish_reason", {})
         if finish.get("type") not in ("stop", "length"):
             raise ValueError("unsupported serving finish reason")
@@ -63,13 +79,15 @@ class SGLangBackend:
         stop_sequence = finish.get("matched") if isinstance(finish.get("matched"), str) else None
         if stop_sequence not in converted["sampling"]["stop"]:
             stop_sequence = None
+        eos_id = getattr(self.tokenizer, "eos_token_id", None)
+        eos = finish["type"] == "stop" and finish.get("matched") == eos_id
         reason = "max_tokens" if finish["type"] == "length" else (
             "tool_use" if has_tools else "stop_sequence" if stop_sequence else "end_turn")
-        # Until a live probe confirms raw probability semantics, serve only EVAL_ONLY evidence.
-        return {"input_ids": payload["input_ids"], "output_ids": [r[1] for r in rows],
+        return {"input_ids": payload["input_ids"], "output_ids": output_ids,
                 "logprobs": [r[0] for r in rows], "logprob_semantics": "raw_model" if self.audited_raw_logprobs else "unverified",
                 "engine_id": self.endpoint, "policy_version": str(meta["weight_version"]),
                 "tokenizer_digest": self.tokenizer_digest, "template_digest": self.template_digest,
                 "serving_input": payload, "evidence_kind": "serving", "content": blocks,
-                "finish_reason": reason, "stop_sequence": stop_sequence, "sampling": converted["sampling"],
+                "finish_reason": reason, "stop_sequence": stop_sequence, "eos": eos,
+                "sampling": converted["sampling"],
                 "serving_output_digest": digest(output)}

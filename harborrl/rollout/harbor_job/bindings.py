@@ -3,7 +3,7 @@ import re
 from urllib.parse import urlsplit
 
 
-def claude_config(profile, gateway_url, credential):
+def claude_config(profile, gateway_url, credential, max_output_tokens=8192):
     required = {"cli_version", "model", "max_turns", "agent_timeout_sec", "setup_timeout_sec", "verifier_timeout_sec"}
     if set(profile) != required:
         raise ValueError(f"Claude profile requires exactly {sorted(required)}")
@@ -19,6 +19,10 @@ def claude_config(profile, gateway_url, credential):
         raise ValueError("Anthropic base URL must be a plain origin (no /v1 suffix)")
     if not isinstance(credential, str) or not credential:
         raise ValueError("attempt credential is required")
+    if type(max_output_tokens) is not int or max_output_tokens <= 0:
+        raise ValueError("positive Claude output budget required")
+    # Some bundled runtimes do not interpret CIDR blocks in NO_PROXY.  The
+    # policy gateway is the one mandatory direct route for every attempt.
     return {"name": "claude-code", "model_name": profile["model"],
             "override_timeout_sec": profile["agent_timeout_sec"],
             "override_setup_timeout_sec": profile["setup_timeout_sec"],
@@ -26,7 +30,9 @@ def claude_config(profile, gateway_url, credential):
                        "max_thinking_tokens": 0, "disallowed_tools": "Agent,Task",
                        "permission_mode": "bypassPermissions"},
             "env": {**client_controls(), "ANTHROPIC_API_KEY": credential,
-                    "ANTHROPIC_BASE_URL": gateway_url.rstrip("/")}}
+                    "ANTHROPIC_BASE_URL": gateway_url.rstrip("/"),
+                    "NO_PROXY": url.hostname, "no_proxy": url.hostname,
+                    "CLAUDE_CODE_MAX_OUTPUT_TOKENS": str(max_output_tokens)}}
 
 
 def client_controls():

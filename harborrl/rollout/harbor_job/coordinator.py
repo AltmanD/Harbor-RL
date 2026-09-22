@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import secrets
+import shlex
 
 from harborrl.trajectories.native import publish, assemble
 from .audit import audit_session
@@ -63,8 +64,18 @@ class GroupSlots:
         return export_group([self.completed[slot] for slot in self.identities], len(self.identities))
 
 
+def runner_command(runner_python, project, runner_host=None):
+    module = "harborrl.rollout.harbor_job.runner"
+    if runner_host is None:
+        return [runner_python, "-m", module]
+    remote = f"cd {shlex.quote(str(project))} && exec {shlex.quote(runner_python)} -m {module}"
+    return ["ssh", "-o", "BatchMode=yes", "-o", "ClearAllForwardings=yes",
+            "-o", "StrictHostKeyChecking=accept-new", runner_host, remote]
+
+
 async def run_attempt(identity, *, task_path, profile, gateway_url, runner_python,
-                      root, registry, reward_profile, timeout=1800, cleanup_timeout=120):
+                      root, registry, reward_profile, timeout=1800, cleanup_timeout=120,
+                      max_output_tokens=8192, runner_host=None):
     """One real trial. CPU-only tests use a separate fake worker, never this path."""
     root = Path(root).resolve()
     root.mkdir(parents=True, exist_ok=False)
@@ -74,7 +85,8 @@ async def run_attempt(identity, *, task_path, profile, gateway_url, runner_pytho
     env["PYTHONPATH"] = project
     stderr = (root / "runner.stderr").open("wb")
     try:
-        process = await asyncio.create_subprocess_exec(runner_python, "-m", "harborrl.rollout.harbor_job.runner",
+        command = runner_command(runner_python, project, runner_host)
+        process = await asyncio.create_subprocess_exec(*command,
             stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=stderr, env=env)
     except BaseException:
         stderr.close()
@@ -84,7 +96,8 @@ async def run_attempt(identity, *, task_path, profile, gateway_url, runner_pytho
     messages = []
     try:
         req = {"identity": identity.to_dict(), "task_path": str(Path(task_path).resolve()), "profile": profile,
-               "gateway_url": gateway_url, "credential": credential, "output": str(root / "runner")}
+               "gateway_url": gateway_url, "credential": credential, "output": str(root / "runner"),
+               "max_output_tokens": max_output_tokens}
         process.stdin.write(json.dumps(req).encode() + b"\n")
         await process.stdin.drain()
 
@@ -144,7 +157,10 @@ async def run_attempt(identity, *, task_path, profile, gateway_url, runner_pytho
                 await process.stdin.drain()
                 await asyncio.wait_for(process.wait(), cleanup_timeout)
             except (BrokenPipeError, ConnectionResetError, asyncio.TimeoutError):
-                process.kill()
+                try:
+                    process.kill()
+                except ProcessLookupError:
+                    pass
                 await process.wait()
                 publish(root / "cleanup-required.json", {"identity": identity.to_dict(), "trial_id": trial_id,
                     "reason": "Runner cleanup deadline exceeded; inspect Harbor resources before retry"})

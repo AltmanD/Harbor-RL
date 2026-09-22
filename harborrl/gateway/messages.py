@@ -29,7 +29,8 @@ def text_blocks(value):
 
 def convert(payload, *, model, max_output_tokens=8192, count_only=False):
     keys(payload, ("model", "messages", "system", "tools", "tool_choice", "max_tokens",
-                   "temperature", "top_p", "top_k", "stop_sequences", "stream", "metadata"), "request")
+                   "temperature", "top_p", "top_k", "stop_sequences", "stream", "metadata",
+                   "thinking", "context_management", "output_config"), "request")
     if payload.get("model") != model:
         raise ProtocolError("model alias is not bound to this policy profile")
     if type(payload.get("stream", False)) is not bool:
@@ -46,6 +47,18 @@ def convert(payload, *, model, max_output_tokens=8192, count_only=False):
         raise ProtocolError("invalid stop sequences")
     if payload.get("metadata") is not None:
         keys(payload["metadata"], ("user_id",), "metadata")
+    # Claude Code 2.1.x emits these controls even when adaptive thinking is
+    # disabled.  Accept only the exact no-op forms for the thinking-disabled
+    # Qwen chat template; no unknown policy semantics can cross the gateway.
+    if payload.get("thinking") not in (None, {"type": "adaptive"}):
+        raise ProtocolError("unsupported thinking control")
+    if payload.get("context_management") not in (
+            None, {"edits": [{"type": "clear_thinking_20251015", "keep": "all"}]}):
+        raise ProtocolError("unsupported context management control")
+    effort = payload.get("output_config")
+    if effort is not None and (not isinstance(effort, dict) or set(effort) != {"effort"}
+                               or effort["effort"] not in ("low", "medium", "high")):
+        raise ProtocolError("unsupported output configuration")
     if not isinstance(payload.get("tools", []), list):
         raise ProtocolError("tools must be a list")
     tools, names = [], set()
@@ -70,7 +83,7 @@ def convert(payload, *, model, max_output_tokens=8192, count_only=False):
     for item in history:
         keys(item, ("role", "content"), "message")
         role = item.get("role")
-        if role not in ("user", "assistant"):
+        if role not in ("system", "user", "assistant"):
             raise ProtocolError("unsupported message role")
         blocks = item.get("content")
         if isinstance(blocks, str):

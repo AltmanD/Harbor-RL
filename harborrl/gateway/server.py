@@ -2,6 +2,7 @@
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import secrets
+from urllib.parse import urlsplit
 from .messages import ProtocolError, convert, sse_events
 from harborrl.trajectories.native import digest, encode
 
@@ -52,6 +53,11 @@ def make_server(gateway, host="127.0.0.1", port=0, *, max_body_bytes=8 * 1024 * 
         def log_message(self, *args):
             pass  # default access logs can expose caller-supplied URLs
 
+        def do_GET(self):
+            if urlsplit(self.path).path != "/readyz":
+                return self.reply(404, {"type": "error", "error": {"type": "not_found_error", "message": "unsupported endpoint"}})
+            return self.reply(200, {"ok": True, "model": gateway.model})
+
         def reply(self, status, payload):
             body = encode(payload)
             self.send_response(status)
@@ -63,7 +69,8 @@ def make_server(gateway, host="127.0.0.1", port=0, *, max_body_bytes=8 * 1024 * 
         def do_POST(self):
             aid = message = None
             try:
-                if self.path not in ("/v1/messages", "/v1/messages/count_tokens"):
+                path = urlsplit(self.path).path
+                if path not in ("/v1/messages", "/v1/messages/count_tokens"):
                     return self.reply(404, {"type": "error", "error": {"type": "not_found_error", "message": "unsupported endpoint"}})
                 if self.headers.get("Transfer-Encoding"):
                     raise ProtocolError("chunked request bodies are not supported")
@@ -78,7 +85,7 @@ def make_server(gateway, host="127.0.0.1", port=0, *, max_body_bytes=8 * 1024 * 
                     token = auth[7:]
                 gateway.registry.authenticate(token)
                 payload = json.loads(self.rfile.read(size), parse_constant=lambda v: (_ for _ in ()).throw(ProtocolError("nonfinite JSON")))
-                if self.path.endswith("count_tokens"):
+                if path.endswith("count_tokens"):
                     return self.reply(200, gateway.count_tokens(token, payload))
                 aid, message = gateway.generate(token, payload)
                 if payload.get("stream"):

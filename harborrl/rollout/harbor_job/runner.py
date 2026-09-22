@@ -49,9 +49,11 @@ async def execute(request, emit, read_command):
     root.mkdir(parents=True, exist_ok=False)
     publish(root / "manifest.json", {"identity": identity.to_dict(), "task": inspection,
                                      "profile": request["profile"], "gateway_url": request["gateway_url"]})
-    config = TrialConfig.model_validate({"task": {"path": inspection["path"]},
+    config = TrialConfig.model_validate({
+        "task": {"path": inspection["path"]},
         "trial_name": digest(identity.to_dict()), "trials_dir": str(root / "harbor"),
-        "agent": claude_config(request["profile"], request["gateway_url"], request["credential"]),
+        "agent": claude_config(request["profile"], request["gateway_url"], request["credential"],
+                               request["max_output_tokens"]),
         "environment": {"type": "docker", "delete": True},
         "verifier": {"disable": False, "override_timeout_sec": request["profile"]["verifier_timeout_sec"]}})
     trial = await Trial.create(config)
