@@ -244,7 +244,11 @@ class RolloutManager:
         if len(engines) != expected_count or any(engine is None for engine in engines):
             raise RuntimeError('policy pool has missing engines')
         states = ray.get([engine.policy_state.remote() for engine in engines], timeout=90)
-        return publish_pool(states, expected)
+        version = publish_pool(states, expected)
+        if os.getenv('HARBORRL_NATIVE_ROLLOUT') == '1':
+            from harborrl.rollout.native_generate import publish_native_version
+            publish_native_version(states, version)
+        return version
 
     def generate(self, rollout_id):
         self.verify_policy_pool()
@@ -558,7 +562,15 @@ class RolloutManager:
             elif buffer_enabled and hasattr(self, "_dynamic_global_batch_size"):
                 delattr(self, "_dynamic_global_batch_size")
 
-            if not buffer_enabled and not self.args.disable_rollout_trim_samples:
+            # Native rollouts expand one trajectory into multiple context-dependent
+            # turns only after this stage. Trimming by fixed trajectory GBS would
+            # silently drop valid tail turns and destroy the exported group.
+            native_batch = any(
+                isinstance(getattr(sample, "metadata", None), dict)
+                and "native_ir" in sample.metadata
+                for sample in data
+            )
+            if not native_batch and not buffer_enabled and not self.args.disable_rollout_trim_samples:
                 global_batch_size = self.args.global_batch_size
                 target_steps_per_rollout = getattr(self.args, "num_steps_per_rollout", None)
                 # dynamic_history can expand one rollout into many step-wise samples.
@@ -1200,7 +1212,13 @@ class RolloutManager:
     def _split_train_data_by_dp(self, data, dp_size):
         """Split the train data by data parallel size."""
         rollout_data = {}
-        if os.getenv('HARBORRL_VERIFY_POLICY_POOL') == '1' and dp_size > 1:
+        if "native_advantages" in data:
+            from harborrl.platform.dp_batch import pad_filtered_batch
+            # One update consumes all turns. Never trim or split a rollout across updates.
+            count = len(data["tokens"])
+            self._dynamic_global_batch_size = ((count + dp_size - 1) // dp_size) * dp_size
+            pad_filtered_batch(data, self._dynamic_global_batch_size)
+        elif os.getenv('HARBORRL_VERIFY_POLICY_POOL') == '1' and dp_size > 1:
             from harborrl.platform.dp_batch import pad_filtered_batch
             batch_size = getattr(self, '_dynamic_global_batch_size', self.args.global_batch_size)
             padding = pad_filtered_batch(data, batch_size)
@@ -1244,6 +1262,9 @@ class RolloutManager:
                 "round_number",
                 "sample_indices",
                 "rollout_log_probs",
+                "native_advantages",
+                "native_token_weights",
+                "native_padding",
                 "rollout_routed_experts",
                 "policy_versions",
                 "current_policy_version",

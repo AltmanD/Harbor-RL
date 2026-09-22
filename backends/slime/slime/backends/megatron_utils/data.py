@@ -585,6 +585,8 @@ def log_rollout_data(
                 "teacher_topk_log_probs",
                 "teacher_topk_indices",
                 "sil_precomputed_advantages",
+                "native_advantages",
+                "native_token_weights",
                 "sil_reward_baseline",
                 # Payload fields for the world-model aux hook (dicts / nested
                 # latent lists), not loggable metrics.

@@ -428,10 +428,15 @@ class GenerateState(metaclass=SingletonMeta):
 
     def submit_generate_tasks(self, samples: list[list[Sample]]) -> None:
         for group in samples:
+            generate_group_func = generate_and_rm_group
+            if os.getenv("HARBORRL_NATIVE_ROLLOUT") == "1":
+                from harborrl.rollout.native_generate import generate_group as native_generate_group
+
+                generate_group_func = native_generate_group
             self.pendings.add(
                 asyncio.create_task(
                     # submit a group of samples as a single task.
-                    generate_and_rm_group(
+                    generate_group_func(
                         self.args,
                         group,
                         sampling_params=self.sampling_params.copy(),

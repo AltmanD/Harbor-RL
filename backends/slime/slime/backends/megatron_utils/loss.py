@@ -326,6 +326,20 @@ def compute_advantages_and_returns(args: Namespace, rollout_data: RolloutBatch) 
             "total_lengths"). Modified in-place to add "advantages" and
             "returns" keys, each mapping to lists of tensors per sample.
     """
+    if "native_advantages" in rollout_data:
+        if "native_token_weights" not in rollout_data:
+            raise ValueError("native advantages require native token weights")
+        if (getattr(args, "custom_loss_function_path", None)
+                != "harborrl.rollout.exporters.native_slime.loss_function"
+                or getattr(args, "custom_convert_samples_to_train_data_path", None)
+                != "harborrl.rollout.exporters.native_slime.convert_samples"):
+            raise ValueError("native GRPO requires its explicit Slime converter and loss hooks")
+        if (args.loss_type != "custom_loss" or args.calculate_per_token_loss
+                or not args.use_rollout_logprobs or args.normalize_advantages):
+            raise ValueError("native GRPO requires its custom loss, rollout logprobs and no secondary normalization")
+        rollout_data["advantages"] = rollout_data["native_advantages"]
+        rollout_data["returns"] = rollout_data["native_advantages"]
+        return
     log_probs: list[torch.Tensor] = rollout_data.get("rollout_log_probs" if args.use_rollout_logprobs else "log_probs")
     ref_log_probs: list[torch.Tensor] = rollout_data.get("ref_log_probs")
     rewards: list[float] = rollout_data.get("rewards")

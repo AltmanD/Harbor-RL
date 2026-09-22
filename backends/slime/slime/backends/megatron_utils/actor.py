@@ -249,7 +249,7 @@ class MegatronTrainRayActor(TrainRayActor):
 
             rollout_data["max_seq_lens"] = [max_seq_len] * len(rollout_data["tokens"])
 
-        for key in ["rollout_log_probs", "teacher_log_probs"]:
+        for key in ["rollout_log_probs", "teacher_log_probs", "native_advantages", "native_token_weights"]:
             if key not in rollout_data:
                 continue
             rollout_data[key] = [
