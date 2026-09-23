@@ -22,7 +22,6 @@ FIELDS = {
 
 
 def validate(config, path):
-    from harborrl.config import ROOT
     from harborrl.trajectories.native import read_json
     if set(config) != set(FIELDS) | {'schema_version'} or type(config['schema_version']) is not int or config['schema_version'] != 2:
         raise ValueError('native schema requires exactly the documented schema 2 sections')
@@ -73,8 +72,8 @@ def validate(config, path):
     if d['actor_gpus'] % d['actor_tensor_parallel_size'] or d['rollout_gpus'] % d['rollout_gpus_per_engine']:
         raise ValueError('GPU counts must be divisible by TP')
     preset = config['model']['args_file']
-    if not isinstance(preset,str) or not re.fullmatch(r'[A-Za-z0-9_-]+',preset) or not (ROOT / f'backends/slime/scripts/models/{preset}.sh').is_file():
-        raise ValueError('unknown model preset')
+    if not isinstance(preset,str) or not re.fullmatch(r'[A-Za-z0-9_-]+',preset):
+        raise ValueError('model.args_file must name a Slime model preset; SLIME_DIR is checked by doctor')
     for key in ('tokenizer_digest', 'template_digest'):
         if not re.fullmatch(r'[0-9a-f]{64}', g[key]):
             raise ValueError(f'gateway.{key} must be a SHA-256 digest')
@@ -136,7 +135,6 @@ def launch_plan(config):
         'HARBORRL_GPU_LAYOUT': c['deployment']['layout'],
         'HARBORRL_STRUCTURED_LAUNCH': '1', 'HARBORRL_VERIFY_POLICY_POOL': '1',
         'HARBORRL_SKIP_GLOBAL_CLEANUP': '1', 'SLIME_RAY_PLACEMENT_GPU_PROBE': '1',
-        'SLIME_ENTRYPOINT': str(ROOT / 'backends/slime/train.py'),
         'PYTORCH_CUDA_ALLOC_CONF': ('max_split_size_mb:2048' if c['deployment']['layout'] == 'colocate'
                                     else 'max_split_size_mb:2048,expandable_segments:True'),
         'HARBORRL_NATIVE_ROLLOUT': '1',

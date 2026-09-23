@@ -90,32 +90,68 @@ def doctor(plan):
     except (ValueError, OSError, TypeError) as exc:
         checks.append({"service": "native catalog", "ok": False, "detail": str(exc)})
 
-    for package in ("ray", "torch", "sglang", "transformers", "mbridge",
-                    "megatron-bridge", "nvidia-modelopt"):
+    for package in ("ray", "torch", "sglang", "transformers"):
         try:
             version = importlib.metadata.version(package)
         except importlib.metadata.PackageNotFoundError:
             version = None
         checks.append({"dependency": package, "version": version, "ok": version is not None})
-    checks.append({"dependency": "bundled Megatron-LM",
-                   "ok": (ROOT / "backends/Megatron-LM/megatron/core/__init__.py").is_file()})
 
-    runtime_env = os.environ.copy()
-    runtime_pythonpath = os.pathsep.join([
-        str(ROOT / "backends/Megatron-LM"), str(ROOT), str(ROOT / "backends/slime"),
-        runtime_env.get("PYTHONPATH", ""),
-    ])
-    runtime_env["PYTHONPATH"] = runtime_pythonpath
-    for module in ("megatron.bridge", "mbridge", "slime_plugins.megatron_bridge",
-                   "modelopt.torch.distill.plugins.megatron"):
+    from harborrl.backends.slime_v032.versions import MEGATRON_COMMIT, SLIME_COMMIT, SGLANG_IMAGE_TAG
+    slime_dir = os.environ.get("SLIME_DIR", "").strip()
+    slime_path = Path(slime_dir) if slime_dir else None
+    checks.append({"path": "SLIME_DIR", "ok": bool(slime_path and slime_path.is_dir()),
+                   "detail": slime_dir or "not set"})
+    if slime_path and slime_path.is_dir():
+        checks.append({"path": "slime entrypoint", "ok": (slime_path / "train.py").is_file()})
+        preset = slime_path / "scripts" / "models" / f"{config['model']['args_file']}.sh"
+        checks.append({"path": "slime model preset", "ok": preset.is_file(), "detail": str(preset)})
         try:
-            probe = subprocess.run([sys.executable, "-c", f"import {module}"],
-                                   capture_output=True, text=True, timeout=90, check=False,
-                                   env=runtime_env)
+            commit = subprocess.run(["git", "-C", str(slime_path), "rev-parse", "HEAD"],
+                                    capture_output=True, text=True, timeout=15, check=True).stdout.strip()
         except (subprocess.SubprocessError, OSError) as exc:
-            probe = SimpleNamespace(returncode=1, stdout="", stderr=str(exc))
-        checks.append({"dependency": module, "ok": probe.returncode == 0,
-                       "detail": probe.stderr.strip()[-1000:]})
+            commit = ""
+            checks.append({"service": "slime commit", "ok": False, "detail": str(exc)})
+        if commit:
+            checks.append({"service": "slime commit", "ok": commit == SLIME_COMMIT,
+                           "detail": f"{commit} != {SLIME_COMMIT}" if commit != SLIME_COMMIT else commit})
+
+        megatron_dir = os.environ.get("MEGATRON_DIR", "").strip()
+        if megatron_dir:
+            try:
+                megatron_commit = subprocess.run(["git", "-C", megatron_dir, "rev-parse", "HEAD"],
+                                                 capture_output=True, text=True, timeout=15, check=True).stdout.strip()
+            except (subprocess.SubprocessError, OSError) as exc:
+                megatron_commit = ""
+                checks.append({"service": "megatron commit", "ok": False, "detail": str(exc)})
+            if megatron_commit:
+                checks.append({"service": "megatron commit", "ok": megatron_commit == MEGATRON_COMMIT,
+                               "detail": f"{megatron_commit} != {MEGATRON_COMMIT}" if megatron_commit != MEGATRON_COMMIT else megatron_commit})
+        else:
+            checks.append({"service": "megatron commit",
+                           "ok": True,
+                           "detail": "MEGATRON_DIR not set; official Slime image bundles Megatron"})
+
+        runtime_env = os.environ.copy()
+        runtime_pythonpath = os.pathsep.join(filter(None, [
+            str(slime_path), megatron_dir, str(ROOT), runtime_env.get("PYTHONPATH", ""),
+        ]))
+        runtime_env["PYTHONPATH"] = runtime_pythonpath
+        for module in ("slime.rollout.base_types", "slime.utils.types",
+                       "slime.backends.megatron_utils.loss"):
+            try:
+                probe = subprocess.run([sys.executable, "-c", f"import {module}"],
+                                       capture_output=True, text=True, timeout=90, check=False,
+                                       env=runtime_env)
+            except (subprocess.SubprocessError, OSError) as exc:
+                probe = SimpleNamespace(returncode=1, stdout="", stderr=str(exc))
+            checks.append({"dependency": module, "ok": probe.returncode == 0,
+                           "detail": probe.stderr.strip()[-1000:]})
+
+    sglang_image = os.environ.get("SGLANG_IMAGE", "").strip()
+    if sglang_image:
+        checks.append({"service": "sglang image", "ok": sglang_image.endswith(SGLANG_IMAGE_TAG),
+                       "detail": sglang_image})
 
     if shutil.which("nvidia-smi"):
         try:
@@ -176,11 +212,11 @@ def _source_audit(root):
         return subprocess.check_output(["git", *args], cwd=ROOT)
 
     files = git("ls-files", "-z", "--cached", "--others", "--exclude-standard", "--",
-                "harborrl", "backends", "pyproject.toml").decode().split("\0")
+                "harborrl", "scripts", "examples", "pyproject.toml").decode().split("\0")
     untracked = set(git("ls-files", "-z", "--others", "--exclude-standard", "--",
-                        "harborrl", "backends").decode().split("\0"))
+                        "harborrl", "scripts", "examples").decode().split("\0"))
     (root / "source.patch").write_bytes(git("diff", "--binary", "HEAD", "--",
-                                             "harborrl", "backends", "pyproject.toml"))
+                                             "harborrl", "scripts", "examples", "pyproject.toml"))
     hashes = {}
     for name in files:
         source = ROOT / name
