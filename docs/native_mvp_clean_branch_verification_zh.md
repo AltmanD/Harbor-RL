@@ -62,3 +62,11 @@ $PY -m harborrl.cli train --config runs/native-mvp-20260922/native-config.yaml -
 ```
 
 上述命令全部通过后，才可认为 clean branch 的 GPU 机复核完成。
+
+## 2026-09-23 复核与奖励对比验收更新
+
+GPU 机复核在 `f7a81629`（= `9132f06e` + docs + 两个修复）完成：
+回归 **102 passed**、doctor 与 dry-run 通过。随后的真实训练补齐了
+`reward 0/1 对比 → 非零梯度 → 权重实际变化 → 下一轮使用新 policy version`
+的全部验收项，详见
+`docs/native_mvp_clean_branch_reward_contrast_zh.md`。
