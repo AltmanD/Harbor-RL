@@ -13,6 +13,9 @@
 - [native_mvp_clean_branch_verification_zh.md](native_mvp_clean_branch_verification_zh.md)——
   clean `feat/harborrl-mvp` 分支提交切分、99 项回归、doctor/dry-run 与 GPU
   SSH 复核边界。
+- [branch_management_plan_zh.md](branch_management_plan_zh.md)——MVP 归档、干净移植层、exporter 重构与公开发布的分支策略。
+- [exporter_refactor_plan_zh.md](exporter_refactor_plan_zh.md)——Slime v0.3.2 能力评估、中性 TrainingBatch 与 adapter 技术设计。
+- [public_release_cleanup_plan_zh.md](public_release_cleanup_plan_zh.md)——公开发布双仓模型、白名单目标树、Hub/GPU 决策门与审计清单（现状修订版）。
 - [exporter_v032_dev_status_zh.md](exporter_v032_dev_status_zh.md)——Slime v0.3.2 exporter 重构 dev 分支的中性契约、adapter、CPU 门禁与剩余 GPU 门槛状态。
 - [native_cpu_development_zh.md](native_cpu_development_zh.md)——原生 Claude Code
   CPU/契约开发边界、schema 2 入口、Slime 训练契约测试与 GPU 验证记录。

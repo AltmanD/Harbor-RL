@@ -1,106 +1,117 @@
-# HarborRL 公开发布整理方案
+# HarborRL 公开发布整理方案（现状修订版）
 
-日期：2026-09-23  
-分支：`feat/harborrl-mvp`  
-结论：**当前分支和完整 Git 历史不能直接推送到公开 GitHub**。应先保留私有研究分支，再以白名单方式创建无敏感历史的新发布分支，把仓库收敛为 Native MVP 的核心框架、最小示例、后端适配说明和可复现测试。
+日期：2026-09-23（修订）  
+适用对象：私有集成仓 `AltmanD/Harbor-RL` 及其 `main` / `feat/harborrl-mvp` / `refactor/slime-v032-exporter-dev` 分支  
+配套文档：`docs/branch_management_plan_zh.md`（分支与迁移策略）、`docs/exporter_refactor_plan_zh.md`（exporter 技术设计）、`docs/exporter_v032_dev_status_zh.md`（dev 分支验收状态）  
+结论：**采用“私有仓继续集成 + 新公开仓无历史发布”的双仓模型**。公开发布树以 Native MVP 核心与 Slime v0.3.2 零 patch adapter 为目标，经 Harbor Hub 兼容门与 GPU 验收门后，从 `release/public-v0.1` 的 tracked tree 提取白名单文件，在新公开仓库创建无父提交。
 
-## 1. 发布目标
+## 0. 执行摘要
 
-### 1.1 公共版本定位
+1. `main`、`feat/harborrl-mvp` 和 refactor dev 分支的 **Git 历史均不可公开**：`benchmarks/`（10,337 个文件 / 139.6 MiB）和 SETA fixture 私钥早已进入 `main` 历史（引入提交 `6e5f9cb6`）。
+2. 因此 `branch_management_plan_zh.md` 中“main 是可信基线”应理解为**私有集成基线**：继续受保护、不改写；公开发布则必须使用**新公开仓库 + 无历史根提交**。
+3. 内容管线维持分支管理方案的缓冲层设计：`main → feat/native-mvp-clean → refactor/slime-v032-exporter → release/public-v0.1`；最后一跳把 release tree 提取到公开仓，而不是把私有 refs 推公开。
+4. 公开 v0.1 的训练后端目标版本是 **Slime v0.3.2 官方组合 + HarborRL 薄 adapter（零 patch）**；refactor dev 分支已完成 CPU 契约层（91 项目标测试通过），GPU 单步验收仍是发布阻断项。
+5. Harbor Hub 已适配数据集的 inspect / catalog / Native rollout 兼容能力是清理阻断项；`probe.py` 对 `environments/terminal` 的依赖必须在清理时给出替代，不允许静默删除。
 
-公开发布的 HarborRL 应该是一个结构清晰、边界明确、便于从业者学习和复用的智能体 RL 训练框架，而不是内部实验仓库的压缩版。
+## 1. 当前状态盘点（2026-09-23）
 
-保留的主线能力：
+### 1.1 分支与规模
 
-1. **Native agentic RL 训练链路**：配置校验、doctor、Messages Gateway、Harbor task rollout、reward/trajectory 契约、GRPO/Slime 导出和单步训练闭环。
-2. **可复现实验入口**：一个最小公开任务、一个 CPU contract smoke、一个可选 GPU 单步训练示例。
-3. **清晰扩展点**：任务、harness、gateway backend、training backend、reward/trajectory schema 的替换方式。
-4. **可测试性**：公开 CI 能在无 GPU/无内部服务的情况下验证核心契约；GPU 检查作为可选门禁。
+| 分支 / 引用 | 提交 | tracked 文件 | 大小 | 状态 |
+| --- | --- | ---: | ---: | --- |
+| `origin/main` | `dce4cfaa` | 13,128 | 182.1 MiB | 私有可信集成基线；历史含 benchmarks 与私钥 |
+| `origin/feat/harborrl-mvp` | `999513bb` | 13,198 | 182.4 MiB | 已验收 MVP；相对 main 22 个提交 |
+| 本地 `feat/harborrl-mvp` | `8af8a478` | — | — | 领先 origin 1 个提交，工作区有暂存/未跟踪内容，且被其他进程占用 |
+| `refactor/slime-v032-exporter-dev` | `2a9b2352` | 13,216 | 182.5 MiB | 基于 `999513bb`；新增中性 exporter 与 v0.3.2 adapter；CPU 目标套件 91 passed |
 
-不随首版公开的内容：
+MVP 树主要构成：`benchmarks/` 10,337 文件 / 139.59 MiB；`backends/`（vendored Slime + Megatron）2,466 文件 / 37.59 MiB；`harborrl/` 150 文件 / 1.48 MiB；`tools/` 87；`tests/` 48；`docs/` 33；`deploy/` 31。
 
-- 多套内部 benchmark 数据和环境快照。
-- DIVE-PO、LWM、SPEAR、Agent57 等研究分支和历史算法实验。
-- SETA/AgentHarm/Agent-SafetyBench/Tau2/SWE 全家桶适配。
-- 内部集群 RJob、代理、节点修复和运维记录。
-- 逐日验收报告、主机拓扑、IP、SSH alias、个人路径和实验日志。
+### 1.2 refactor dev 分支相对 MVP 的增量
 
-### 1.2 非目标
+- 新增 `harborrl/export/`：backend-neutral `TrainingBatch` 契约、Native IR 导出与 fail-closed 校验，无 Slime/Torch/Megatron import。
+- 新增 `harborrl/backends/slime_v032/`：rollout / converter / advantage / loss / postprocess / versions / launcher 七个模块，对应 Slime v0.3.2 五个官方扩展 hook。
+- 接线：`training.backend_contract`（默认 `slime-legacy`）、`HARBORRL_NATIVE_SLIME_CONTRACT` 选择器、doctor 静态 hook 检查。
+- 测试：`tests/harborrl/test_slime_v032_exporter.py`（12 项）与 shell dry-run 参数化断言。
+- 未完成：官方镜像 feasibility spike、GPU 单步验收、custom loss 缩放核对、真实 rollout 集成、Harbor Hub matrix（详见 `docs/exporter_v032_dev_status_zh.md`）。
 
-首次公开版本不应声称支持当前私有分支中出现过的所有环境、算法和部署形态。README 中应明确：
+### 1.3 必须先处理的发布阻断
 
-- 首版只承诺 Native MVP 及其测试过的最小链路。
-- benchmark 结果和环境扩展属于后续 release 或独立 package。
-- 多轮稳定训练、故障恢复和集群运维不是首版默认能力。
+#### P0-1：敏感资产已在私有仓历史中
 
-## 2. 当前仓库体检
-
-### 2.1 规模与结构
-
-当前跟踪对象约 **13,197 个文件 / 182.4 MiB**，其中主要分布如下：
-
-| 目录 | 文件数 | 大小 | 判断 |
-| --- | ---: | ---: | --- |
-| `benchmarks/` | 10,337 | 139.6 MiB | 私有任务资产和数据快照，不应公开 |
-| `backends/` | 2,466 | 37.6 MiB | vendored Slime/Megatron 第三方整仓，应外部化 |
-| `harborrl/` | 150 | 1.5 MiB | 混合 Native MVP、旧 interactive 栈、算法实验和 worker 系统 |
-| `tools/` | 87 | 0.5 MiB | 历史评测、分析和站点诊断工具 |
-| `tests/` | 48 | 0.4 MiB | 只有 Native 相关测试是首版核心 |
-| `docs/` | 32 | 1.3 MiB | 混有论文草稿、内部验收、历史记录和公开文档 |
-| `deploy/` | 31 | 0.4 MiB | 大量内部代理、节点和 RJob 运维细节 |
-| `examples/` | 24 | 0.1 MiB | 旧模型、旧环境、LWM/RJob 示例占多数 |
-
-当前分支相对 `origin/main` 有 21 个提交，并且继承了主线中的大量实验代码、benchmark 资产和第三方后端。仅在当前分支上做删除提交，不能移除 Git 历史中的内容。
-
-### 2.2 必须先处理的发布阻断
-
-#### P0-1：敏感资产已经在 Git 历史中
-
-检查发现以下类型的内容会随历史公开：
-
-- `benchmarks/environments/seta_env/1198/ssh_keys/id_rsa` 是 OpenSSH 私钥文件。
-- 多个 Native MVP 验收文档包含内部 SSH alias、主机名、IP、个人用户名和集群域名。
-- `deploy/ops`、`deploy/runtime`、`deploy/workers`、`examples`、`runs/rjob` 中存在内部代理、私有 registry、RJob 镜像、个人绝对路径和集群网络信息。
-- 本地 `runs/` 目录约 168 GiB，虽大多未跟踪，但包含大量 trajectory、日志、模型和路径信息，必须继续禁止进入发布历史。
+- `benchmarks/environments/seta_env/1198/ssh_keys/id_rsa` 为 OpenSSH 私钥，`main` 与 MVP 树中均存在（同目录还有 `id_rsa.pub`）。
+- 多个验收文档包含内部 SSH alias、主机名、IP、个人用户名和集群域名。
+- `deploy/ops`、`deploy/runtime`、`deploy/workers`、`examples`、`runs/rjob` 含内部代理、私有 registry、RJob 镜像、个人绝对路径和集群网络信息。
+- 本地 `runs/` 约 168 GiB 未跟踪内容必须继续禁止入库。
 
 处理原则：
 
-1. **先轮换/作废暴露过的密钥和凭据**，包括 benchmark fixture 私钥、集群 SSH 凭据、代理凭据、registry token 和 API token。
-2. **不要把 `feat/harborrl-mvp` 直接推到公开远端**。
-3. 使用新 public 分支或新仓库，从无历史根提交开始；只复制白名单文件。
-4. 发布前扫描全部 Git 对象，而不是只扫描工作区当前文件。
+1. **先轮换/作废暴露过的密钥与凭据**（benchmark fixture 私钥、集群 SSH、代理、registry token、API token），再谈公开发布。
+2. 不把任何私有分支或 refs 推到公开远端。
+3. 公开发布使用新仓库、新根提交，只复制白名单文件。
+4. 发布前扫描公开仓的**全部 Git 对象**，而不只是工作区快照。
 
-#### P0-2：vendored 第三方后端带来维护和合规噪音
+#### P0-2：vendored 第三方整仓
 
-`backends/slime` 是 464 个文件、约 27 MiB 的修改版整仓；`backends/Megatron-LM` 是 2,002 个文件、约 37.6 MiB 的整仓。它们还带着自己的 CI、issue 模板、测试资产和发布流程。
+`backends/slime`（464 文件）与 `backends/Megatron-LM`（2,002 文件）是修改版整仓，公共用户难以判断 HarborRL 自有代码边界，第三方升级与安全修复也难以追踪。公开仓改为“官方 pinned 版本 + bootstrap 校验 +（仅在必要时）最小 patch”。
 
-这会造成：
+#### P0-3：文档与 README 状态矛盾
 
-- 公共用户难以判断 HarborRL 自有代码边界。
-- 第三方升级和安全修复难以追踪。
-- 发布仓库体积和审计成本偏高。
-- HarborRL patch 与上游行为差异被整仓噪音淹没。
+`README.md` / `README_zh.md` 仍有 “native 尚未验收” 的过期表述，与 `docs/README.md` 中 8×H200 全链路、reward 对比、checkpoint 重载验收记录冲突；同时存在 LightRL 旧命名、旧 logo、旧 citation 与临时 `cleanup_status.md` 链接。公开仓 README 必须重写。
 
-应改为“外部 pinned backend + HarborRL patch/bootstrap”的模式。
+#### P0-4：Harbor Hub 兼容是清理阻断项
 
-#### P0-3：文档状态互相矛盾
+以下模块在 MVP 树中均存在，公开清理时不允许无替代删除：`harborrl/tasks/cli.py`、`harborrl/data/harbor/{inspector,native_inspector,receipt,materializer,probe}.py`、`harborrl/data/download.py`。其中 `probe.py` import `harborrl.environments.terminal.runtime.TerminalEnv`；若公开树移除 `environments/terminal/`，必须二选一：
 
-当前 `README.md` 和 `README_zh.md` 开头仍写着 “native 尚未验收”，而 `docs/README.md` 和 Native MVP 结果文档已经声明 8×H200 全链路、reward 对比、checkpoint 重载和显式权重变化验收完成。首段还指向 `docs/cleanup_status.md`，不是正常开源首页入口。
+1. 保留一个无内部站点逻辑的最小 probe 兼容层；或
+2. 先把 probe 改为直接使用 Native Harbor Runner / Docker 语义。
 
-公开前必须重写 README，统一状态为：Native MVP 单步/有界训练链路已验证，但不承诺长期稳定训练和多 benchmark 复现。
+#### P0-5：共享工作区被占用
 
-## 3. 目标代码结构
+`/mnt/shared-storage-user/luyudong/Harbor-RL` 当前有其他进程使用且工作区不干净。所有发布整理操作必须在独立 clone / worktree 中进行（现有 `/mnt/shared-storage-user/luyudong/Harbor-RL-refactor` 可继续作为 refactor 开发环境），禁止在共享工作区执行 `git clean -fdx` 或切换分支。
 
-### 3.1 首版目标树
+## 2. 发布架构决策：双仓模型
+
+### 2.1 为什么必须新公开仓
+
+旧版方案与新分支方案的矛盾点在这里统一：
+
+- 分支管理方案的“main 可信、不重写历史”适用于**私有集成仓**：main 继续作为受保护基线，只接收 reviewed PR。
+- 清理方案的事实核查表明 **main 历史同样包含私钥与私有数据资产**，因此任何携带 main 父历史的分支都不能作为公开仓库的主线。
+- 结论：公开仓必须新根提交；这不是备用方案，而是公开发布的必要出口。但**不需要也不应该改写私有 main**。
+
+### 2.2 仓库角色
+
+| 仓库 / 分支 | 角色 | 历史 | 可见性 |
+| --- | --- | --- | --- |
+| 私有仓 `main` | 长期集成基线 | 保留，不改写 | 私有 |
+| 私有仓 `feat/harborrl-mvp` + `archive/*` + tag | MVP 验收与实验留档 | 保留 | 私有 / 本地 |
+| 私有仓 `feat/native-mvp-clean` | 从 main 选择性移植的干净内容层 | 正常提交 | 私有 PR |
+| 私有仓 `refactor/slime-v032-exporter` | 干净分支上的 v0.3.2 adapter | 正常提交 | 私有 PR |
+| 私有仓 `release/public-v0.1` | 清理后的候选发布树 | 正常提交 | 私有 PR |
+| **新公开仓 `public/v0.1`** | 最终公开发布 | **无父提交** | 公开 |
+
+### 2.3 内容流水线
 
 ```text
-HarborRL/
-├── README.md
-├── README_zh.md
-├── LICENSE
-├── NOTICE.md
-├── CONTRIBUTING.md
-├── SECURITY.md
+私有仓:
+  main
+    └── feat/native-mvp-clean        # 选择性移植 MVP 核心 + Hub 兼容层
+          ├── refactor/slime-v032-exporter   # 接收 dev 分支受限 patch
+          └── release/public-v0.1            # 执行本清理方案，合入 refactor
+
+公开发布:
+  release/public-v0.1 --allowlist--> 新公开仓 orphan root --> PR --> v0.1.0-public tag
+```
+
+受限 patch 边界（来自 `branch_management_plan_zh.md` §5.3）：dev 分支差异只允许落在 `harborrl/export/`、`harborrl/backends/`、launcher、配置、测试与文档内；不直接 merge `refactor/slime-v032-exporter-dev`。
+
+## 3. 公开 v0.1 目标树
+
+### 3.1 目录骨架
+
+```text
+├── LICENSE / NOTICE.md / CONTRIBUTING.md / SECURITY.md
+├── README.md / README_zh.md
 ├── pyproject.toml
 ├── .gitignore
 ├── .github/workflows/ci.yml
@@ -110,310 +121,181 @@ HarborRL/
 │   ├── configuration.md
 │   ├── backend-integration.md
 │   ├── task-format.md
+│   ├── dataset-compatibility.md
 │   └── release-scope.md
 ├── examples/native/
 │   ├── cpu_contract_smoke.sh
 │   ├── train_qwen_native.yaml
 │   ├── worker_setup.md
 │   └── tasks/hello_world/
-├── patches/
-│   └── slime/harborrl-native-mvp.patch
+├── configs/harbor_hub/manifests.yaml      # 只含元数据，不含数据本体
 ├── scripts/
 │   ├── bootstrap_backends.sh
+│   ├── sglang_semantic_probe.py           # 若仍是发布门禁
 │   └── audit_public_tree.sh
 ├── harborrl/
 │   ├── cli.py
 │   ├── config/native.py
 │   ├── gateway/
-│   ├── data/harbor/
+│   ├── data/harbor/                       # inspector / native_inspector / receipt / materializer / probe
+│   ├── data/download.py
+│   ├── tasks/cli.py
 │   ├── platform/native_train.py
-│   ├── platform/slime_train_native.sh
+│   ├── platform/slime_train*.sh            # native-only 重写
 │   ├── rollout/native_generate.py
 │   ├── rollout/harbor_job/
-│   ├── rollout/exporters/native.py
-│   ├── rollout/exporters/native_slime.py
+│   ├── export/                             # 中性 TrainingBatch 契约（来自 refactor 分支）
+│   ├── backends/slime_v032/                # Slime v0.3.2 官方 hook adapter
 │   └── trajectories/native.py
 └── tests/harborrl/
     ├── test_native_contracts.py
     ├── test_native_gateway.py
     ├── test_native_lifecycle.py
-    └── test_native_training.py
+    ├── test_native_training.py
+    └── test_slime_v032_exporter.py
 ```
 
 ### 3.2 `harborrl` 包收敛原则
 
 | 现有模块 | 处理 | 原因 |
 | --- | --- | --- |
-| `config/native.py` | 保留并重命名入口整理 | Native schema 2 是首版核心 |
-| `gateway/` | 保留 | Messages Gateway、SGLang backend 和 token/logprob 审计属于主链路 |
-| `trajectories/native.py` | 保留 | reward、identity、IR 和原子发布契约属于主链路 |
-| `rollout/native_generate.py` | 保留 | Native rollout group 调度核心 |
-| `rollout/harbor_job/` | 保留并审计依赖 | Harbor Runner、collector、audit、offline smoke 属于主链路 |
-| `rollout/exporters/native.py`、`native_slime.py` | 保留 | GRPO 训练样本导出边界 |
-| `data/harbor/{inspector,native_inspector,receipt}.py` | 保留 | task/receipt 校验 |
-| `platform/native_train.py` | 保留并拆掉硬编码后端路径 | doctor/launcher 核心 |
-| `platform/slime_train.sh` | 重写为 native-only launcher | 当前混合 interactive/native 分支，难以维护 |
-| `platform/worker_*`、`router*`、`run_leases` | 移除或另建内部包 | 属于旧远程环境池和站点运维，不是 Native MVP 必需 |
-| `environments/` | 移除 | 旧 SETA/AgentHarm/Tau2/SWE runtime 栈 |
-| `harnesses/` | 移除，保留 Native Runner 的外部 CLI 约定 | 旧 Camel/Claude adapter 混合大量可选依赖 |
-| `algorithms/` | 移除 | DIVE-PO/LWM/PRM/Agent57 研究分支 |
-| `data/convert_*` | 移除 | 私有 benchmark 转换器 |
-| `rollout/{entrypoint,generate_steps,runner,admission,...}` | 移除 | 旧 interactive rollout 栈 |
-| `tasks/cli.py`、`misc/` | 逐项检查，只保留 Native smoke 需要的函数 | 避免为了一个工具拖入旧体系 |
+| `config/native.py` | 保留，入口整理 | Native schema 2 与 `backend_contract` 是首版核心 |
+| `gateway/` | 保留 | Messages Gateway、SGLang backend、token/logprob 审计 |
+| `trajectories/native.py` | 保留 | reward、identity、IR、原子发布契约 |
+| `rollout/native_generate.py`、`rollout/harbor_job/` | 保留并审计依赖 | Native rollout 与 Harbor Runner 主链路 |
+| `export/`（新） | 保留 | backend-neutral `TrainingBatch`，纯 Python 可 CPU 测试 |
+| `backends/slime_v032/`（新） | 保留 | 零 patch 官方 hook adapter；GPU 验收门通过后为默认 |
+| `rollout/exporters/native.py` | 保留为中性导出的兼容薄层或并入 `export/` | 数值语义与 golden 测试基准 |
+| `rollout/exporters/native_slime.py`（legacy patched 路径） | **不进公开 v0.1**（GPU 门通过后）；迁移期内只留在私有分支 | 依赖 vendored patch 与私有张量 key |
+| `data/harbor/{inspector,native_inspector,receipt}.py` | 保留 | task/receipt 校验与 Hub 兼容 |
+| `data/harbor/{materializer,probe}.py`、`data/download.py`、`tasks/cli.py` | 保留或提供等价替代 | Harbor Hub 兼容阻断项 |
+| `environments/terminal/` | 默认移除；若 probe 未改造则保留最小无内部站点层 | 旧 TerminalEnv 栈不属 Native MVP |
+| `platform/worker_*`、`router*`、`run_leases` | 移除或另建内部包 | 旧远程环境池与站点运维 |
+| `environments/`、`harnesses/`、`algorithms/`、`data/convert_*`、旧 `rollout/` interactive 栈 | 移除 | SETA/AgentHarm/Tau2/SWE/DIVE-PO/LWM 等研究与旧栈 |
+| `misc/` | 逐项检查 | 只保留 Native smoke 必需函数 |
 
-移动代码时不要整目录复制后再删；先建立目标 import 边界，再按调用图迁移，最后用测试和 `ruff` 清理 unused import。
+迁移规则：先建 import 边界，再按调用图搬迁；禁止整目录复制后再删。
 
 ## 4. 逐目录处置方案
 
-### 4.1 `benchmarks/`
+### 4.1 `benchmarks/`（10,337 文件 / 139.6 MiB）
 
-**处置：整体移出公共仓库。**
+**整体不进公开仓。** 替代：
 
-原因：
+1. `examples/native/tasks/hello_world/` 提供可离线运行、无真实凭据的最小任务。
+2. Harbor Hub / task manifest 提供外部下载命令，不提交数据快照。
+3. 每个外部 benchmark 单列 upstream、license、下载方式、hash 与安全边界（进 `docs/dataset-compatibility.md` 或 `configs/harbor_hub/manifests.yaml`）。
+4. 私有任务继续留在内部存储 / 私有数据仓，通过显式 task root 注入。
 
-- 10,048 个 SETA environment 文件和大量 JSONL 混合了任务、数据、fixture、密钥和历史转换产物。
-- 公共仓库会暴露数据授权、任务安全和内部资产边界问题。
-- 学习者只需要一个最小任务格式示例和外部任务下载说明。
+### 4.2 `backends/`（2,466 文件 / 37.6 MiB）
 
-替代方案：
+**不 vendored。** 公开仓后端策略：
 
-1. 增加 `examples/native/tasks/hello_world/`，必须是可公开、可离线运行、无真实凭据的最小任务。
-2. 提供 Harbor Hub/task manifest 的下载命令，不在仓库中提交数据快照。
-3. 对每个外部 benchmark 建立独立说明，列 upstream、license、下载方式、hash 和安全边界。
-4. 私有任务保留在内部存储或私有数据仓库，通过 `HARBORRL_TASK_ROOT` 注入。
-
-### 4.2 `backends/`
-
-**处置：不 vendored，改为外部依赖和 patch。**
-
-建议步骤：
-
-1. 以当前验证过的 Slime upstream commit 为 pin 基准。
-2. 从当前 vendored 树中提取 HarborRL 必需差异，形成 `patches/slime/harborrl-native-mvp.patch`。
-3. `scripts/bootstrap_backends.sh` 支持：
-   - `--slime-ref <commit>`
-   - `--megatron-ref <commit>`
-   - `--apply-patch`
-   - `--check`
-4. 运行时只接受 `SLIME_DIR` / `MEGATRON_DIR`，doctor 中检查版本和 patch 状态。
-5. README 不再声称 “bundles Slime/Megatron”，改为 “integrates with pinned Slime/Megatron”。
-
-如果最小 patch 仍然覆盖大量文件，短期替代方案是维护一个只含 HarborRL 变更的私有 fork，公共仓库 pin fork commit；不要继续复制第三方整仓。
+1. 基准版本：Slime `v0.3.2`（commit `3778dbf6d1a533ab478ecf5ddaa11449a47752b2`）、Megatron `1dcf0dafa884ad52ffb243625717a3471643e087`、SGLang `v0.5.15.post1-cu129`。
+2. `scripts/bootstrap_backends.sh --check` 校验版本；默认目标是**零 patch**。
+3. 只有 GPU 验收证明官方 hook 无法表达训练语义时，才降级为最小 patch，并把 patch 与 hash 纳入门禁（见 §5 决策门）。
+4. 运行时只接受 `SLIME_DIR` / `MEGATRON_DIR` 显式路径；无后端时 fail-closed 且报错清晰。
 
 ### 4.3 `docs/`
 
-**处置：从 32 个文件收敛到 6 个左右的公开文档。**
+从 33 个文件收敛到约 7 个公开文档：`quickstart`、`architecture`、`configuration`、`backend-integration`、`task-format`、`dataset-compatibility`、`release-scope`。内部验收、逐日记录、主机拓扑、SSH 复核、清理过程文档全部留在私有分支。
 
-保留/重写：
+### 4.4 `deploy/`、`examples/`、`tools/`
 
-| 文档 | 内容 |
-| --- | --- |
-| `quickstart.md` | 安装、backend bootstrap、任务准备、CPU smoke、GPU dry-run、训练入口 |
-| `architecture.md` | Native rollout、Gateway、Harbor Runner、Slime/Megatron 边界和数据流 |
-| `configuration.md` | schema 2、必填项、路径、worker、模型、安全和 dry-run |
-| `backend-integration.md` | pinned commit、patch、环境变量、doctor 和升级边界 |
-| `task-format.md` | task manifest、digest、receipt、reward profile 和最小 hello-world |
-| `release-scope.md` | 已验证/未验证能力，避免过度宣传 |
+- `deploy/`：整体移除；`worker_setup.md` 用无内部默认值的公开文档替代。
+- `examples/`：只保留 `examples/native/`；旧模型、旧环境、LWM/RJob 示例移除。
+- `tools/`：历史评测/分析/开发工具移除；`tools/verification/sglang_semantic_probe.py` 若仍是门禁则迁至 `scripts/` 并审计路径。
 
-移除或保留在私有 archive：
+### 4.5 `tests/`
 
-- `docs/algorithms/`
-- `docs/evaluation/`
-- `docs/performance/`
-- `docs/operations/`
-- `docs/native_mvp_*_zh.md`
-- `docs/native_cpu_development_zh.md`
-- `docs/records/`
-- 所有内部 Go/No-Go、主机名、IP、日志和验收证据。
+核心集合：`test_native_contracts.py`、`test_native_gateway.py`、`test_native_lifecycle.py`、`test_native_training.py`、`test_slime_v032_exporter.py`。需补齐：最小任务 inspector/digest/receipt、clean install + CLI help、bootstrap 版本校验、public hygiene（禁内部域名/个人路径/私钥/大二进制）。删除依赖旧环境、LWM、SPEAR、Agent57、RJob、internal worker 的测试。
 
-内部验收可压缩为公开 release note 中的一句话级证据，不包含环境标识和路径。
+### 4.6 根目录与元数据
 
-### 4.4 `examples/` 与 `configs/`
+保留并更新：README（双语）、LICENSE、NOTICE、CONTRIBUTING、SECURITY、pyproject、.gitignore、CI workflow。移除：`legacy-requirements.txt`、`sitecustomize.py`、`runs/rjob/`、旧 logo 资产、本地 probe 脚本。`pyproject.toml`：只打包 `harborrl*`；删除 `lightrl-eval` 兼容入口；extras 分 `native` / `gateway` / `train` / `dev`；基础安装不拉 Torch/Megatron 全家桶。
 
-**处置：只保留 Native MVP 一条学习路径。**
+## 5. Exporter 决策门（发布前必须裁决）
 
-保留：
+| 状态 | 条件 | 公开 v0.1 动作 |
+| --- | --- | --- |
+| **目标路径** | v0.3.2 官方镜像 spike + GPU 单步验收全部通过，零 patch 成立 | 公开树只含 `export/` + `backends/slime_v032/`；不含 legacy exporter 与 Slime patch |
+| **降级路径** | GPU 验收证明必须最小 patch | 公开树保留 v032 adapter + `patches/slime/*.patch` + hash 门禁；patch 范围与理由写入 `backend-integration.md` |
+| **阻塞路径** | GPU 验收未完成或 loss 缩放未确认 | **推迟公开发布**；不把未验证的 legacy patched 路径当作公开默认能力发布 |
 
-- `examples/native/cpu_contract_smoke.sh`
-- `examples/native/train_qwen_native.yaml`
-- `examples/native/worker_setup.md`
-- 最小公开任务。
+GPU 验收最低要求（沿用 `exporter_refactor_plan_zh.md` Phase 6）：官方组合启动、0/1 reward contrast、rollout logprob 与 Gateway 审计一致、非零 advantage/gradient/PG loss、显式权重变化、checkpoint 保存重载、新 policy version 生效、关键指标与已验收 MVP 误差在允许范围。
 
-移除：
+## 6. Harbor Hub 数据兼容门
 
-- GLM/Qwen 多套旧 rollout 配方。
-- Math、SPEAR、ALFWorld、LWM、RJob、SETA 评测脚本。
-- `configs/rollout/` 历史模型模板。
-- `configs/train_*_smoke.yaml` 中旧的 `lightrl_interactive` 入口。
+“已适配数据集仍可用”的定义（发布阻断）：
 
-配置命名统一为 `native_*`，避免 `lightrl_interactive` 与 HarborRL Native MVP 混淆。
+1. 外部 task root / Hub 下载 / 本地缓存三种来源可用。
+2. `harborrl hub inspect`（或等价 CLI）可检查本地 task。
+3. inspector 识别已适配 task profile；catalog 记录 dataset、revision、path、digest。
+4. Native runner 按 catalog 执行；reward receipt 进入 Native IR。
+5. exporter 重构后 batch 保持相同 group / trajectory / turn 语义。
+6. 公开仓不含私有数据本体与个人绝对路径。
 
-### 4.5 `deploy/`
+发布前建立 `docs/dataset-compatibility.md` 或 `configs/harbor_hub/manifests.yaml`：dataset 名、upstream repo/revision/branch、license、下载方式、task root 约定、expected task count、digest 策略、inspector 预期、Docker/GPU 需求、已通过的 Native smoke、负责人。任何 dataset 从 `SUPPORTED` 变 `UNSUPPORTED` 且无解释，不得合入 release。
 
-**处置：删除站点运维树，重写一页通用 worker setup。**
-
-移除：
-
-- `deploy/ops/`
-- `deploy/runtime/`
-- `deploy/archive/`
-- 现有 `deploy/workers/` 的内部 Docker pool/watchdog 体系。
-
-新增 `examples/native/worker_setup.md` 只描述：
-
-- 前置依赖：Python、Docker、Harbor Runner、Claude Code CLI。
-- 网络和安全要求。
-- 环境变量注入。
-- 健康检查命令。
-- 常见故障的 fail-closed 行为。
-
-不提供内部代理默认值、节点修复脚本、私有 registry、SSH alias 或 root 操作脚本。
-
-### 4.6 `tools/`
-
-**处置：删除历史工具，只保留必要验证工具或迁入 `scripts/`。**
-
-- `tools/evaluation/`、`tools/analysis/`、`tools/dev/` 全部移除。
-- `tools/verification/sglang_semantic_probe.py` 若仍是发布门禁，迁到 `scripts/sglang_semantic_probe.py`，并确保无内部路径。
-- 其他工具由内部研究分支保留。
-
-### 4.7 `tests/`
-
-**处置：测试按公开能力重建，而不是保留 48 个历史测试。**
-
-首版核心集合：
-
-- `test_native_contracts.py`
-- `test_native_gateway.py`
-- `test_native_lifecycle.py`
-- `test_native_training.py`
-
-需要补齐：
-
-- 最小任务 inspector/digest/receipt 测试。
-- clean install 后 import 和 CLI help 测试。
-- backend bootstrap patch 的 hash/dry-run 测试。
-- public hygiene 测试：禁止内部域名、个人路径、私钥文件和超大二进制进入 Git。
-
-删除所有依赖旧环境、旧评测、LWM、SPEAR、Agent57、RJob 和 internal worker 的测试。
-
-### 4.8 根目录与元数据
-
-保留并更新：
-
-- `README.md`、`README_zh.md`
-- `LICENSE`
-- `NOTICE.md`
-- `CONTRIBUTING.md`
-- `SECURITY.md`
-- `pyproject.toml`
-- `.gitignore`
-- `.github/workflows/ci.yml`
-
-移除：
-
-- `legacy-requirements.txt`
-- `sitecustomize.py`
-- `runs/rjob/`
-- `assets/lightrl_logo*`
-- `probe.sh`、本地 scripts 和 update probe。
-
-`pyproject.toml` 调整：
-
-1. 只打包 `harborrl*`，不再打包 `tools*`。
-2. 删除 `lightrl-eval` 兼容入口。
-3. optional extras 分为 `native`、`gateway`、`train`、`dev`。
-4. 锁定可运行的 Python 和核心依赖范围，不在基础安装中拉入 Torch/Megatron 全家桶。
-
-## 5. README 重写大纲
-
-英文和中文 README 应保持同一信息结构：
-
-1. **What is HarborRL**：三句话说明 Native agentic RL MVP 的范围。
-2. **Status**：明确已验证的单步/有界训练链路和未承诺的能力。
-3. **Architecture diagram**：Config → Doctor → Gateway → Harbor Runner → Reward/IR → Slime GRPO → Checkpoint。
-4. **Install**：基础库、optional extras、backend bootstrap。
-5. **Quickstart**：hello-world CPU contract smoke。
-6. **GPU training**：dry-run 前置条件、外部 worker、pinned backend、最小配置。
-7. **Repository map**：不超过 20 行。
-8. **Extension points**：task、gateway backend、training backend。
-9. **Testing**：CPU CI 和 optional GPU gate。
-10. **Acknowledgement / Citation / License**。
-
-必须修正：
-
-- 首行指向 `cleanup_status.md` 的临时说明。
-- “native 尚未验收”的过期陈述。
-- LightRL 命名、旧 logo、旧 citation URL 与 HarborRL 身份不一致的问题。
-- 未说明 backend 前置条件和资源边界的问题。
-
-## 6. 实施步骤
+## 7. 实施步骤（现状版）
 
 ### Phase 0：冻结与保护（0.5 天）
 
-1. 确认当前 `feat/harborrl-mvp` HEAD 和测试状态，不再向该分支加入无关实验。
-2. 为当前分支建立私有 tag 和本地 bundle。
-3. 轮换/作废所有可能进入历史的凭据和私钥。
-4. 明确 public release owner 和 GitHub 目标仓库。
+1. 在独立 clone 中操作；不占用共享 MVP 工作区。
+2. 以 `origin/feat/harborrl-mvp`（`999513bb`）为验收固化点：打 `mvp/native-v0.1-accepted` tag、建 `archive/harborrl-mvp-accepted`、生成持久目录 bundle。
+3. 将需要入库的 ignored 文本实验记录显式加入 `archive/harborrl-local-experiments`（先列 allowlist，排除 cache/`node_modules`/`.tools`/大数据）。
+4. 轮换/作废暴露凭据；确定 public release owner 与公开仓库名。
 
-### Phase 1：创建干净历史（0.5 天）
+### Phase 1：干净内容层（1–2 天）
 
-建议新建发布仓库，或在新仓库中执行：
+1. 从 `main` 建 `feat/native-mvp-clean`。
+2. 按 §3 白名单从 MVP 选择性移植 Native 核心、测试与 Hub 兼容层；按小提交拆分。
+3. 处理 `probe.py` → TerminalEnv 依赖（最小兼容层或 Native Runner 改造）。
+4. 通过 Native CPU 测试与代表性 Hub dataset smoke。
+
+### Phase 2：合入 exporter 重构（1 天 + GPU 等待）
+
+1. 从 `feat/native-mvp-clean` 建 `refactor/slime-v032-exporter`。
+2. 将 `refactor/slime-v032-exporter-dev` 的差异以受限 patch 应用（边界见 §2.3）。
+3. 在干净分支重跑 CPU 套件；完成官方镜像 spike 与 GPU 单步验收。
+4. 按 §5 决策门确定零 patch / 最小 patch / 阻塞。
+
+### Phase 3：候选发布树（1–2 天）
+
+1. 从 `feat/native-mvp-clean` 建 `release/public-v0.1`，执行本方案清理。
+2. `git rm` 移除 benchmarks、vendored backends、deploy、旧研究模块与内部运维脚本。
+3. 制作 hello-world 任务、native train YAML、worker setup 文档。
+4. 合入 `refactor/slime-v032-exporter`。
+5. 通过 Hub dataset matrix（inspect + catalog + 代表任务 Native smoke）。
+
+### Phase 4：新公开仓初始化（0.5 天）
 
 ```bash
-git switch --orphan public-release-v0
-git rm -rf .
-# 只复制白名单文件；不复制 .git、runs、benchmarks、backends、deploy 内部资产
+# 在新公开仓库中，不携带任何私有 refs
+git switch --orphan public-v0.1
+git rm -rf . 2>/dev/null || true
+# 从 release/public-v0.1 复制白名单文件
 git add <allowlist>
 git commit -m "release: initialize HarborRL native MVP"
 ```
 
-要求：
-
-- 新分支没有 `origin/main` 和 `feat/harborrl-mvp` 的父历史。
-- 首个提交即最终结构，避免先复制敏感文件再删除。
-- 不复用当前远端的 refs。
-- 若必须使用原仓库，应使用专业 history rewrite 工具并强制清理所有 refs；优先级低于新仓库方案。
-
-### Phase 2：抽取 Native MVP 核心（1–2 天）
-
-1. 建立新的 `harborrl` 包骨架。
-2. 迁移配置、Gateway、trajectory、task inspector、runner/coordinator/audit/exporter。
-3. 简化 CLI：`inspect`、`doctor`、`train`、`offline-smoke`。
-4. 重写 native-only Slime launcher，删除旧 interactive 配置分支。
-5. 用 import graph 检查，确保核心包不依赖 `environments`、`harnesses`、`algorithms`、`tools`。
-
-### Phase 3：外部化训练后端（1–2 天）
-
-1. 记录当前验证使用的 Slime/Megatron commit 和运行环境。
-2. 提取并最小化 Slime patch。
-3. 实现 bootstrap/check 脚本。
-4. 修改 doctor 和 launcher 的路径解析。
-5. 在无 backend 的基础安装下，错误信息必须清晰 fail-closed。
-
-### Phase 4：最小任务与示例（1 天）
-
-1. 制作公开 hello-world task。
-2. 校验 task digest、reward 0/1、IR 和 offline smoke。
-3. 提供 native train YAML 和 worker setup 文档。
-4. 不提交模型 checkpoint、私有镜像名、内部代理或个人路径。
+要求：无 `main` / MVP 父历史；首提交即最终结构；不复用私有远端 refs；如必须留在原仓库则需专业 history rewrite 工具全量清 refs（优先级低于新仓库）。
 
 ### Phase 5：文档与 CI（1 天）
 
-1. 重写 README 和 6 个核心文档。
-2. 增加 GitHub Actions CPU matrix。
-3. 增加 package build、ruff、pytest、shell syntax、public hygiene 检查。
-4. 增加 optional GPU workflow 或发布前手工 checklist。
+1. 重写双语 README（§8 大纲）与 7 个核心文档。
+2. GitHub Actions CPU matrix；package build、ruff、pytest、shell syntax、public hygiene。
+3. optional GPU workflow 或发布前手工 checklist。
 
 ### Phase 6：发布审计（0.5–1 天）
 
-审计命令至少包括：
+至少执行：
 
 ```bash
 git rev-list --all --count
 git log --oneline --decorate --graph --all
 git fsck --full --no-dangling
-git grep -I -n -E 'luyudong|puyuan|pjlab|kubebrain|registry\\.h\\.pjlab|/mnt/shared-storage-user' $(git rev-list --all)
+git grep -I -n -E 'luyudong|puyuan|pjlab|kubebrain|registry\.h\.pjlab|/mnt/shared-storage-user' $(git rev-list --all)
 python -m pytest -q tests/harborrl
 python -m harborrl.cli train --config examples/native/train_qwen_native.yaml --dry-run
 bash scripts/bootstrap_backends.sh --check
@@ -421,52 +303,45 @@ bash scripts/audit_public_tree.sh
 python -m build
 ```
 
-另需运行一个可信 secret scanner，并检查所有历史对象，而不是只检查工作区。
+另需可信 secret scanner 扫描全部历史对象。
 
-## 7. 验收标准
+## 8. README 重写大纲
 
-发布分支必须同时满足：
+双语同构：What is HarborRL（三句话）→ Status（已验证边界与未承诺项）→ Architecture（Config → Doctor → Gateway → Harbor Runner → Reward/IR → Neutral Export → Slime v0.3.2 → Checkpoint）→ Install（基础 + extras + backend bootstrap）→ Quickstart（hello-world CPU smoke）→ GPU Training（dry-run 前置、外部 worker、pinned backend）→ Repository map（≤20 行）→ Extension points（task / gateway backend / training backend）→ Testing → Acknowledgement / Citation / License。
 
-1. **历史干净**：新根提交，无旧研究对象；secret scanner 无 high/critical；内部域名、IP、SSH alias、个人路径和私钥不在任何历史对象中。
-2. **结构简洁**：建议 tracked files 小于 300，仓库主分支小于 20 MiB；除 logo和文档示意图外无大体积数据、checkpoint、环境快照或第三方整仓。
-3. **安装可用**：clean clone 后 `pip install -e .[dev]` 成功，`harborrl --help` 成功。
-4. **CPU 可测**：Native contract/gateway/lifecycle/training 测试在 GitHub Actions 通过。
-5. **Smoke 可跑**：hello-world CPU offline/contract smoke 不需要内部网络。
-6. **Dry-run 可解释**：GPU train dry-run 输出完整命令、backend 路径、worker 配置和缺失项。
-7. **后端可复现**：bootstrap 脚本能 pin backend commit 并校验 patch hash。
-8. **文档一致**：README 状态、quickstart、架构图和 release scope 一致，无失效链接。
-9. **无过度声明**：不声称多 benchmark、多轮稳定训练或内部集群生产可用。
-10. **许可清晰**：HarborRL MIT、第三方依赖和 patch 的 license/notice 明确。
+必须修正：`cleanup_status.md` 临时链接、“native 尚未验收”过期陈述、LightRL 旧命名/旧 logo/旧 citation、backend 前置条件缺失。
 
-## 8. 建议的发布切分
+## 9. 验收标准
 
-### v0.1.0-public：Native MVP framework
+公开仓同时满足：
 
-- Native schema、doctor、Gateway、task rollout、IR/reward、Slime GRPO exporter。
-- hello-world CPU smoke。
-- Qwen Native GPU dry-run 和已验证单步配置。
-- 核心测试与 CI。
+1. **历史干净**：新根提交；secret scanner 无 high/critical；内部域名、IP、SSH alias、个人路径、私钥不在任何历史对象。
+2. **结构简洁**：tracked files < 300；主分支 < 20 MiB；无大数据、checkpoint、环境快照、第三方整仓。
+3. **安装可用**：clean clone 后 `pip install -e .[dev]` 与 `harborrl --help` 成功。
+4. **CPU 可测**：Native contract/gateway/lifecycle/training + slime_v032 exporter 测试在 CI 通过。
+5. **Smoke 可跑**：hello-world CPU contract smoke 无内部网络。
+6. **Dry-run 可解释**：GPU train dry-run 输出完整命令、backend 版本、worker 配置与缺失项。
+7. **后端可复现**：bootstrap pin 官方版本；若降级 patch，hash 校验通过。
+8. **Exporter 门**：§5 决策门有明确结论；默认入口唯一。
+9. **Hub 兼容**：§6 matrix 通过；`SUPPORTED` 集合无未解释缩减。
+10. **文档一致**：README、quickstart、架构图、release scope 无失效链接与矛盾状态。
+11. **许可清晰**：HarborRL MIT；第三方依赖与 patch 的 license/notice 明确。
 
-### v0.2.0：Usability
+## 10. 发布切分
 
-- 更完善的 checkpoint/resume 文档。
-- 多任务 manifest。
-- backend 版本升级测试。
-- GPU smoke workflow。
+- **v0.1.0-public**：Native MVP framework + 零 patch（或门禁过的最小 patch）Slime v0.3.2 adapter + hello-world smoke + Qwen GPU dry-run 配置 + 核心 CI。
+- **v0.2.0**：checkpoint/resume 文档、多任务 manifest、backend 升级测试、GPU smoke workflow。
+- **v0.3.0**：独立 benchmark adapters、更多 harness/gateway backend、任务下载与缓存管理。
 
-### v0.3.0：Ecosystem
+研究算法、内部部署、长周期实验记录继续留在私有分支。
 
-- 独立 benchmark adapters。
-- 更多 harness/gateway backend。
-- 任务下载与缓存管理。
+## 11. 明确不做的事情
 
-研究算法、内部部署和长周期实验记录继续留在私有分支，不进入首版公共主线。
-
-## 9. 明确不做的事情
-
-1. 不在当前分支上直接 `git rm` 后推公开，避免历史泄漏。
-2. 不把 benchmark 私钥改成占位文件后继续沿用同一历史。
-3. 不用 README 链接到 Git 忽略的本地验收文档。
-4. 不把内部集群默认值作为公共 fallback。
-5. 不把未验证的多个环境/算法包装成稳定能力。
-6. 不为了“功能全”保留 1 万多个任务资产和两个第三方整仓。
+1. 不把 `main`、MVP 或任何私有 refs 推到公开远端。
+2. 不在私有分支上 `git rm` 后直接公开（历史仍含敏感对象）。
+3. 不把私钥改成占位文件后沿用同一历史。
+4. 不用 README 链接被 Git 忽略的本地验收文档。
+5. 不把内部集群默认值作为公共 fallback。
+6. 不把未验证的多环境/多算法包装成稳定能力。
+7. 不为“功能全”保留 1 万+ 任务资产与两个第三方整仓。
+8. 不在 GPU/Hub 门未过时抢发公开版本。
