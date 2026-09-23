@@ -6,6 +6,8 @@ from urllib.parse import urlsplit
 import sys
 import re
 
+import yaml
+
 from harborrl.rollout.harbor_job.bindings import claude_config
 from harborrl.trajectories.native import RewardProfile
 
@@ -21,11 +23,32 @@ FIELDS = {
 }
 
 
+def load_config(path, overrides=None):
+    """Load one schema-2 YAML file and apply strict ``section.key=value`` overrides."""
+    path = Path(path).resolve()
+    config = yaml.safe_load(path.read_text())
+    if not isinstance(config, dict):
+        raise ValueError('configuration must be a mapping')
+    if config.get('schema_version') != 2:
+        raise ValueError('native configuration requires schema_version: 2')
+    validate(config, path)
+    for override in overrides or ():
+        key, separator, value = override.partition('=')
+        section_name, _, field = key.partition('.')
+        section = config.get(section_name)
+        if (not separator or field not in FIELDS.get(section_name, ())
+                or not isinstance(section, dict)):
+            raise ValueError(f'unknown native override: {key}')
+        section[field] = yaml.safe_load(value)
+    return validate(config, path)
+
+
 def validate(config, path):
     from harborrl.trajectories.native import read_json
     if set(config) != set(FIELDS) | {'schema_version'} or type(config['schema_version']) is not int or config['schema_version'] != 2:
         raise ValueError('native schema requires exactly the documented schema 2 sections')
-    config['training'].setdefault('backend_contract', 'slime-legacy')
+    config['training'].setdefault(
+        'backend_contract', 'slime-v0.3.2-native-v1')
     for section, fields in FIELDS.items():
         if not isinstance(config[section], dict) or set(config[section]) != fields:
             raise ValueError(f'{section} requires exactly {sorted(fields)}')

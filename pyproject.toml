@@ -14,35 +14,9 @@ dependencies = [
 
 [project.scripts]
 harborrl = "harborrl.cli:main"
-harborrl-eval = "tools.evaluation.eval_cli:main"
-lightrl-eval = "tools.evaluation.eval_cli:main"
 
 [project.optional-dependencies]
-rollout = [
-  "aiohttp>=3.9",
-  "httpx>=0.27",
-  "numpy>=1.26",
-  "openai>=1.30",
-]
-worker = [
-  "aiohttp>=3.9",
-  "camel-ai>=0.2.90",
-  "fastapi>=0.115",
-  "psutil>=5.9",
-  "terminal-bench>=0.2.18",
-  "uvicorn>=0.30",
-]
-camel = ["camel-ai>=0.2"]
-claude = ["anthropic>=0.40", "mcp>=1.0,<2"]
-train = [
-  "datasets>=3.0",
-  "torch>=2.4",
-  "transformers>=4.48",
-]
-lwm = [
-  "numpy>=1.26",
-  "torch>=2.4",
-]
+rollout = ["openai>=1.30"]
 dev = [
   "pytest>=8.0",
   "pytest-asyncio>=0.24",
@@ -51,7 +25,10 @@ dev = [
 
 
 [tool.setuptools.packages.find]
-include = ["harborrl*", "tools*"]
+include = ["harborrl*"]
+
+[tool.setuptools.package-data]
+"harborrl.platform" = ["*.sh"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

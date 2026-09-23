@@ -254,8 +254,9 @@ def test_versions_and_doctor_contract():
                                                 megatron_commit="y", sglang_image="z")
     with pytest.raises(ValueError, match="required"):
         v032_versions.validate_backend_versions()
-    assert v032_versions.runtime_contract_id("slime-legacy") == "legacy"
     assert v032_versions.runtime_contract_id(v032_versions.BACKEND_CONTRACT) == "slime-v032"
+    with pytest.raises(ValueError):
+        v032_versions.runtime_contract_id("slime-legacy")
     with pytest.raises(ValueError):
         v032_versions.runtime_contract_id("unknown")
 

@@ -12,30 +12,6 @@ from types import ModuleType, SimpleNamespace
 import pytest
 
 from harborrl.config import launch_plan, load_config
-from harborrl.platform.dp_batch import pad_filtered_batch
-from harborrl.rollout.exporters.native import export_group
-from harborrl.rollout.exporters.native_slime import convert_samples
-from test_native_contracts import identity, make_ir
-
-
-class FakeSample:
-    def __init__(self, record):
-        self.tokens = record["tokens"]
-        self.response_length = record["response_length"]
-        self.loss_mask = record["loss_mask"][record["prompt_length"]:]
-        self.rollout_log_probs = record["old_logprobs"]
-        self.metadata = {"native_ir": None, "native_turn": record["turn_index"]}
-
-
-def real_evidence(ir):
-    ir = json.loads(json.dumps(ir))
-    for turn in ir["turns"]:
-        turn["evidence_kind"] = "serving"
-    ir["evaluation"]["evidence_kind"] = "harbor"
-    from harborrl.trajectories.native import digest
-    ir["trace_seal"]["turns_digest"] = digest(ir["turns"])
-    ir["readiness"] = "RL_READY"
-    return ir
 
 
 def native_config(tmp_path, **overrides):
@@ -104,9 +80,7 @@ def test_schema2_launch_plan_and_strict_override(tmp_path, capsys):
 
     plan = launch_plan(load_config(path))
     assert plan["environment"]["HARBORRL_NATIVE_ROLLOUT"] == "1"
-    assert plan["environment"]["HARBORRL_NATIVE_SLIME_CONTRACT"] == "legacy"
-    v032_plan = launch_plan(load_config(path, ["training.backend_contract=slime-v0.3.2-native-v1"]))
-    assert v032_plan["environment"]["HARBORRL_NATIVE_SLIME_CONTRACT"] == "slime-v032"
+    assert plan["environment"]["HARBORRL_NATIVE_SLIME_CONTRACT"] == "slime-v032"
     with pytest.raises(ValueError, match="backend_contract"):
         load_config(path, ["training.backend_contract=unknown"])
     assert plan["environment"]["HARBORRL_NATIVE_AUDITED_LOGPROBS"] == "1"
@@ -131,60 +105,16 @@ def test_schema2_launch_plan_and_strict_override(tmp_path, capsys):
         load_config(path)
 
 
-def test_converter_preserves_trajectory_reward_and_global_weight(tmp_path):
-    first = [real_evidence(make_ir(tmp_path, "0", 0, 1)),
-             real_evidence(make_ir(tmp_path, "1", 1, 3))]
-    second = [real_evidence(make_ir(tmp_path, "0", 0, 2)),
-             real_evidence(make_ir(tmp_path, "1", 0, 1))]
-    second = [json.loads(json.dumps(ir)) for ir in second]
-    for slot, ir in enumerate(second):
-        ident = identity(str(slot), group_id="group-b", attempt_id=f"attempt-b-{slot}",
-                         trajectory_id=f"trajectory-b-{slot}")
-        ir["identity"] = ident.to_dict()
-        for turn in ir["turns"]:
-            turn["identity"] = ident.to_dict()
-        ir["evaluation"]["identity"] = ident.to_dict()
-        ir["trace_seal"]["identity"] = ident.to_dict()
-        from harborrl.trajectories.native import digest
-        ir["trace_seal"]["turns_digest"] = digest(ir["turns"])
-
-    samples = []
-    for group in (first, second):
-        by_trajectory = {ir["identity"]["trajectory_id"]: ir for ir in group}
-        for record in export_group(group, 2, allow_synthetic=True)["records"]:
-            sample = FakeSample(record)
-            sample.metadata["native_ir"] = by_trajectory[record["identity"]["trajectory_id"]]
-            samples.append(sample)
-    data = convert_samples(SimpleNamespace(n_samples_per_prompt=2), samples)
-    assert len(data["tokens"]) == 7
-    assert sum(sum(weights) for weights in data["native_token_weights"]) == pytest.approx(1.0)
-    assert not any(data["native_padding"])
-    real = [r for r, flag in zip(data["rewards"], data["native_padding"]) if not flag]
-    assert real[:4] == [0, 1, 1, 1]
-    assert real[4:] == [0, 0, 0]
-
-    trajectory_samples = [SimpleNamespace(metadata={"native_ir": ir})
-                          for group in (first, second) for ir in group]
-    trajectory_data = convert_samples(SimpleNamespace(n_samples_per_prompt=2), trajectory_samples)
-    assert trajectory_data["tokens"] == data["tokens"]
-    assert trajectory_data["native_token_weights"] == data["native_token_weights"]
-
-    assert pad_filtered_batch(data, 3) == 2
-    assert len(data["tokens"]) == 9
-    assert data["native_padding"][-2:] == [True, True]
-    assert all(weight == 0 for weights in data["native_token_weights"][-2:] for weight in weights)
-
-    samples[-1].metadata["native_ir"] = make_ir(tmp_path, "1", 1, 3)
-    with pytest.raises(ValueError, match="synthetic_evidence"):
-        convert_samples(SimpleNamespace(n_samples_per_prompt=2), samples)
-
-
-@pytest.mark.parametrize("contract", ["legacy", "slime-v032"])
-def test_native_shell_dry_run_uses_loss_contract(tmp_path, contract):
+def test_native_shell_dry_run_uses_official_v032_hooks(tmp_path):
     native_config(tmp_path)
     prompt = tmp_path / "native.jsonl"
     prompt.write_text('{"task":"fixture","metadata":{"harborrl_native":true}}\n')
     root = tmp_path / "run"
+    slime = tmp_path / "slime"
+    model_args = slime / "scripts" / "models"
+    model_args.mkdir(parents=True)
+    (slime / "train.py").write_text("# official Slime v0.3.2 entrypoint\n")
+    (model_args / "qwen3-8B.sh").write_text("MODEL_ARGS=(--hidden-size 4096)\n")
     env = {key: value for key, value in os.environ.items()
            if key in {"PATH", "HOME", "USER", "LANG", "LC_ALL", "TMPDIR"}}
     env.update({
@@ -200,7 +130,8 @@ def test_native_shell_dry_run_uses_loss_contract(tmp_path, contract):
         "HARBORRL_NATIVE_MAX_ATTEMPTS": "2", "HARBORRL_NATIVE_DRAIN_TIMEOUT": "1",
         "HARBORRL_NATIVE_RUNNER_WORKERS": '["worker-a", "worker-b"]',
         "HARBORRL_NATIVE_GATEWAY_HOST": "0.0.0.0",
-        "HARBORRL_NATIVE_SLIME_CONTRACT": contract,
+        "HARBORRL_NATIVE_SLIME_CONTRACT": "slime-v032",
+        "SLIME_DIR": str(slime),
     })
     script = Path(__file__).resolve().parents[2] / "harborrl/platform/slime_train.sh"
     output = tmp_path / "shell.log"
@@ -211,17 +142,15 @@ def test_native_shell_dry_run_uses_loss_contract(tmp_path, contract):
     assert result.returncode == 0, result.stdout
     command = next(line for line in result.stdout.splitlines() if line.startswith("[dry-run] "))
     assert "--loss-type custom_loss" in command
-    if contract == "legacy":
-        assert "--custom-loss-function-path harborrl.rollout.exporters.native_slime.loss_function" in command
-        assert "--custom-convert-samples-to-train-data-path harborrl.rollout.exporters.native_slime.convert_samples" in command
-        assert "--rollout-function-path" not in command
-    else:
-        assert "--rollout-function-path harborrl.backends.slime_v032.rollout.generate_rollout" in command
-        assert "--custom-convert-samples-to-train-data-path harborrl.backends.slime_v032.converter.convert_samples_to_train_data" in command
-        assert "--custom-advantage-function-path harborrl.backends.slime_v032.advantage.compute_advantages_and_returns" in command
-        assert "--custom-loss-function-path harborrl.backends.slime_v032.loss.loss_function" in command
-        assert "--rollout-data-postprocess-path harborrl.backends.slime_v032.postprocess.rollout_data_postprocess" in command
-        assert "native_slime" not in command
+    for argument in (
+        "--rollout-function-path harborrl.backends.slime_v032.rollout.generate_rollout",
+        "--custom-convert-samples-to-train-data-path harborrl.backends.slime_v032.converter.convert_samples_to_train_data",
+        "--custom-advantage-function-path harborrl.backends.slime_v032.advantage.compute_advantages_and_returns",
+        "--custom-loss-function-path harborrl.backends.slime_v032.loss.loss_function",
+        "--rollout-data-postprocess-path harborrl.backends.slime_v032.postprocess.rollout_data_postprocess",
+    ):
+        assert argument in command
+    assert "native_slime" not in command
     assert "--use-rollout-logprobs" in command
     assert "--megatron-to-hf-mode bridge" in command
     assert "--load /model" in command
@@ -229,27 +158,6 @@ def test_native_shell_dry_run_uses_loss_contract(tmp_path, contract):
     assert "--num-steps-per-rollout 1" in command
     assert "--use-kl-loss" not in command
     assert "harborrl.rollout.entrypoint.generate" not in command
-
-
-def test_native_runtime_env_passes_external_worker_identity():
-    launch = Path(__file__).resolve().parents[2] / "harborrl/platform/slime_train/lib_launch.sh"
-    passthrough = launch.read_text().split("EXTRA_ENV_PASSTHROUGH_JSON=", 1)[1].split("unset _passthrough_var", 1)[0]
-    assert "HARBORRL_NATIVE_RUNNER_WORKERS" in passthrough
-    assert "HARBORRL_NATIVE_GATEWAY_HOST" in passthrough
-
-
-def test_runtime_env_passthrough_escapes_json_values():
-    helper = Path(__file__).resolve().parents[2] / "harborrl/platform/slime_train/lib_json.sh"
-    script = f'''set -e
-source {helper}
-EXTRA_ENV_PASSTHROUGH_JSON=""
-HARBORRL_NATIVE_RUNNER_WORKERS='["worker-a", "worker-b"]'
-append_env_passthrough HARBORRL_NATIVE_RUNNER_WORKERS
-printf '%s' "$EXTRA_ENV_PASSTHROUGH_JSON"
-'''
-    result = subprocess.run(["bash", "-c", script], check=True, capture_output=True, text=True, timeout=10)
-    payload = '{"PATH": "/bin",' + result.stdout + ' "LAST": "value"}'
-    assert json.loads(payload)["HARBORRL_NATIVE_RUNNER_WORKERS"] == '["worker-a", "worker-b"]'
 
 
 def test_native_runtime_binds_gateway_with_registry_and_backend(tmp_path, monkeypatch):
@@ -426,13 +334,27 @@ def test_native_dispatch_passes_materialized_prompt_data(tmp_path, monkeypatch):
     plan = launch_plan(load_config(path))
     output = tmp_path / "prompt-data-env"
     path_output = tmp_path / "path-env"
+    workers_output = tmp_path / "workers-env"
+    gateway_output = tmp_path / "gateway-env"
+    backend_output = tmp_path / "backend-env"
     plan["training_command"] = [
         "bash", "-c",
-        f"printf %s \"$ROLLOUT_PROMPT_DATA\" > {output}; printf %s \"$PATH\" > {path_output}",
+        f"printf %s \"$ROLLOUT_PROMPT_DATA\" > {output}; "
+        f"printf %s \"$PATH\" > {path_output}; "
+        f"printf %s \"$HARBORRL_NATIVE_RUNNER_WORKERS\" > {workers_output}; "
+        f"printf %s \"$HARBORRL_NATIVE_GATEWAY_HOST\" > {gateway_output}; "
+        f"printf %s \"$SLIME_DIR:$MEGATRON_DIR:$SGLANG_IMAGE\" > {backend_output}",
     ]
+    monkeypatch.setenv("SLIME_DIR", "/opt/slime-v0.3.2")
+    monkeypatch.setenv("MEGATRON_DIR", "/opt/megatron")
+    monkeypatch.setenv("SGLANG_IMAGE", "sglang:v0.5.15.post1-cu129")
     monkeypatch.setattr(native_train, "doctor", lambda *_args, **_kwargs: [])
     assert native_train.dispatch(plan) == 0
     launch_path = next((tmp_path / "runs" / "training").glob("*/launch.json"))
     launch = json.loads(launch_path.read_text())
     assert launch["prompt_data"] == output.read_text()
     assert path_output.read_text().split(os.pathsep, 1)[0] == str(Path(plan["command"][0]).parent)
+    assert json.loads(workers_output.read_text()) == ["worker-a", "worker-b"]
+    assert gateway_output.read_text() == "gateway"
+    assert backend_output.read_text() == (
+        "/opt/slime-v0.3.2:/opt/megatron:sglang:v0.5.15.post1-cu129")

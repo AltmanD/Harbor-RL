@@ -12,7 +12,7 @@ SLIME_COMMIT = "3778dbf6d1a533ab478ecf5ddaa11449a47752b2"
 MEGATRON_COMMIT = "1dcf0dafa884ad52ffb243625717a3471643e087"
 SGLANG_IMAGE_TAG = "v0.5.15.post1-cu129"
 
-CONFIG_CONTRACTS = frozenset({"slime-legacy", BACKEND_CONTRACT})
+CONFIG_CONTRACTS = frozenset({BACKEND_CONTRACT})
 
 
 def expected_versions():
@@ -56,8 +56,6 @@ def validate_backend_versions(
 def runtime_contract_id(config_contract):
     """Map the config contract to the launcher's runtime selector."""
     value = str(config_contract).strip()
-    if value == "slime-legacy":
-        return "legacy"
     if value == BACKEND_CONTRACT:
         return "slime-v032"
     raise ValueError(f"unsupported training backend contract: {config_contract!r}")
