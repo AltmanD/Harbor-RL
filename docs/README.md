@@ -13,6 +13,7 @@
 - [native_mvp_clean_branch_verification_zh.md](native_mvp_clean_branch_verification_zh.md)——
   clean `feat/harborrl-mvp` 分支提交切分、99 项回归、doctor/dry-run 与 GPU
   SSH 复核边界。
+- [exporter_v032_dev_status_zh.md](exporter_v032_dev_status_zh.md)——Slime v0.3.2 exporter 重构 dev 分支的中性契约、adapter、CPU 门禁与剩余 GPU 门槛状态。
 - [native_cpu_development_zh.md](native_cpu_development_zh.md)——原生 Claude Code
   CPU/契约开发边界、schema 2 入口、Slime 训练契约测试与 GPU 验证记录。
 - [architecture.md](architecture.md)——包边界、主链路与扩展点（环境注册表、
