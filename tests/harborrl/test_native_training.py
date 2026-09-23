@@ -104,6 +104,11 @@ def test_schema2_launch_plan_and_strict_override(tmp_path, capsys):
 
     plan = launch_plan(load_config(path))
     assert plan["environment"]["HARBORRL_NATIVE_ROLLOUT"] == "1"
+    assert plan["environment"]["HARBORRL_NATIVE_SLIME_CONTRACT"] == "legacy"
+    v032_plan = launch_plan(load_config(path, ["training.backend_contract=slime-v0.3.2-native-v1"]))
+    assert v032_plan["environment"]["HARBORRL_NATIVE_SLIME_CONTRACT"] == "slime-v032"
+    with pytest.raises(ValueError, match="backend_contract"):
+        load_config(path, ["training.backend_contract=unknown"])
     assert plan["environment"]["HARBORRL_NATIVE_AUDITED_LOGPROBS"] == "1"
     assert json.loads(plan["environment"]["HARBORRL_NATIVE_RUNNER_WORKERS"]) == ["worker-a", "worker-b"]
     assert plan["environment"]["N_SAMPLES"] == "2"
@@ -174,7 +179,8 @@ def test_converter_preserves_trajectory_reward_and_global_weight(tmp_path):
         convert_samples(SimpleNamespace(n_samples_per_prompt=2), samples)
 
 
-def test_native_shell_dry_run_uses_loss_contract(tmp_path):
+@pytest.mark.parametrize("contract", ["legacy", "slime-v032"])
+def test_native_shell_dry_run_uses_loss_contract(tmp_path, contract):
     native_config(tmp_path)
     prompt = tmp_path / "native.jsonl"
     prompt.write_text('{"task":"fixture","metadata":{"harborrl_native":true}}\n')
@@ -194,6 +200,7 @@ def test_native_shell_dry_run_uses_loss_contract(tmp_path):
         "HARBORRL_NATIVE_MAX_ATTEMPTS": "2", "HARBORRL_NATIVE_DRAIN_TIMEOUT": "1",
         "HARBORRL_NATIVE_RUNNER_WORKERS": '["worker-a", "worker-b"]',
         "HARBORRL_NATIVE_GATEWAY_HOST": "0.0.0.0",
+        "HARBORRL_NATIVE_SLIME_CONTRACT": contract,
     })
     script = Path(__file__).resolve().parents[2] / "harborrl/platform/slime_train.sh"
     output = tmp_path / "shell.log"
@@ -204,8 +211,17 @@ def test_native_shell_dry_run_uses_loss_contract(tmp_path):
     assert result.returncode == 0, result.stdout
     command = next(line for line in result.stdout.splitlines() if line.startswith("[dry-run] "))
     assert "--loss-type custom_loss" in command
-    assert "--custom-loss-function-path harborrl.rollout.exporters.native_slime.loss_function" in command
-    assert "--custom-convert-samples-to-train-data-path harborrl.rollout.exporters.native_slime.convert_samples" in command
+    if contract == "legacy":
+        assert "--custom-loss-function-path harborrl.rollout.exporters.native_slime.loss_function" in command
+        assert "--custom-convert-samples-to-train-data-path harborrl.rollout.exporters.native_slime.convert_samples" in command
+        assert "--rollout-function-path" not in command
+    else:
+        assert "--rollout-function-path harborrl.backends.slime_v032.rollout.generate_rollout" in command
+        assert "--custom-convert-samples-to-train-data-path harborrl.backends.slime_v032.converter.convert_samples_to_train_data" in command
+        assert "--custom-advantage-function-path harborrl.backends.slime_v032.advantage.compute_advantages_and_returns" in command
+        assert "--custom-loss-function-path harborrl.backends.slime_v032.loss.loss_function" in command
+        assert "--rollout-data-postprocess-path harborrl.backends.slime_v032.postprocess.rollout_data_postprocess" in command
+        assert "native_slime" not in command
     assert "--use-rollout-logprobs" in command
     assert "--megatron-to-hf-mode bridge" in command
     assert "--load /model" in command

@@ -7,6 +7,7 @@ launcher. It never rewrites task tests or rewards.
 from __future__ import annotations
 
 import hashlib
+import importlib
 import importlib.metadata
 import json
 import os
@@ -129,6 +130,18 @@ def doctor(plan):
             checks.append({"resource": "visible GPU budget", "ok": False, "detail": str(exc)})
     else:
         checks.append({"resource": "visible GPU budget", "ok": False, "detail": "nvidia-smi unavailable"})
+
+    if config["training"]["backend_contract"] != "slime-legacy":
+        from harborrl.backends.slime_v032.launcher import hook_modules
+        for hook_name, module_name in hook_modules().items():
+            try:
+                importlib.import_module(module_name)
+                checks.append({"service": "training backend hook", "hook": hook_name, "ok": True})
+            except (ImportError, AttributeError, TypeError, ValueError) as exc:
+                checks.append({
+                    "service": "training backend hook", "hook": hook_name,
+                    "ok": False, "detail": str(exc),
+                })
 
     checks.append({
         "service": "raw-model logprob audit",

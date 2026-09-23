@@ -14,7 +14,7 @@ FIELDS = {
     'harbor': {'python', 'version', 'workers'},
     'gateway': {'host', 'port', 'advertised_url', 'tokenizer_digest', 'template_digest', 'audited_raw_logprobs'},
     'model': {'checkpoint', 'reference', 'args_file'},
-    'training': {'num_rollout', 'learning_rate', 'save_interval'},
+    'training': {'num_rollout', 'learning_rate', 'save_interval', 'backend_contract'},
     'sampling': {'group_size', 'groups_per_batch', 'max_attempts', 'max_tokens', 'max_context'},
     'deployment': {'layout', 'num_gpus', 'actor_gpus', 'rollout_gpus', 'actor_tensor_parallel_size', 'rollout_gpus_per_engine'},
     'output': {'root'},
@@ -26,6 +26,7 @@ def validate(config, path):
     from harborrl.trajectories.native import read_json
     if set(config) != set(FIELDS) | {'schema_version'} or type(config['schema_version']) is not int or config['schema_version'] != 2:
         raise ValueError('native schema requires exactly the documented schema 2 sections')
+    config['training'].setdefault('backend_contract', 'slime-legacy')
     for section, fields in FIELDS.items():
         if not isinstance(config[section], dict) or set(config[section]) != fields:
             raise ValueError(f'{section} requires exactly {sorted(fields)}')
@@ -45,6 +46,9 @@ def validate(config, path):
             if type(config[section][key]) is not int or config[section][key] <= 0:
                 raise ValueError(f'{section}.{key} must be a positive integer')
     from harborrl.trajectories.native import finite
+    from harborrl.backends.slime_v032.versions import CONFIG_CONTRACTS
+    if config['training']['backend_contract'] not in CONFIG_CONTRACTS:
+        raise ValueError(f"training.backend_contract must be one of {sorted(CONFIG_CONTRACTS)}")
     if not finite(config['training']['learning_rate']) or config['training']['learning_rate'] <= 0:
         raise ValueError('positive finite learning_rate required')
     g, d, s = config['gateway'], config['deployment'], config['sampling']
@@ -113,6 +117,7 @@ def catalog(config):
 
 def launch_plan(config):
     from harborrl.config import ROOT
+    from harborrl.backends.slime_v032.versions import runtime_contract_id
     catalog(config)
     c = config
     environment = {
@@ -135,6 +140,7 @@ def launch_plan(config):
         'PYTORCH_CUDA_ALLOC_CONF': ('max_split_size_mb:2048' if c['deployment']['layout'] == 'colocate'
                                     else 'max_split_size_mb:2048,expandable_segments:True'),
         'HARBORRL_NATIVE_ROLLOUT': '1',
+        'HARBORRL_NATIVE_SLIME_CONTRACT': runtime_contract_id(c['training']['backend_contract']),
         'HARBORRL_NATIVE_RUNNER_PYTHON': c['harbor']['python'],
         'HARBORRL_NATIVE_RUNNER_WORKERS': json.dumps(c['harbor']['workers']),
         'HARBORRL_NATIVE_PROFILE': c['harness']['profile'],

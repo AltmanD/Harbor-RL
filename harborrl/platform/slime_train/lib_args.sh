@@ -331,11 +331,30 @@ if [[ "${HARBORRL_NATIVE_ROLLOUT:-0}" != "1" ]]; then
   CUSTOM_ARGS+=(--custom-generate-function-path harborrl.rollout.entrypoint.generate)
 fi
 if [[ "${HARBORRL_NATIVE_ROLLOUT:-0}" == "1" ]]; then
-  CUSTOM_ARGS+=(
-    --loss-type custom_loss
-    --custom-loss-function-path harborrl.rollout.exporters.native_slime.loss_function
-    --custom-convert-samples-to-train-data-path harborrl.rollout.exporters.native_slime.convert_samples
-  )
+  HARBORRL_NATIVE_SLIME_CONTRACT="${HARBORRL_NATIVE_SLIME_CONTRACT:-legacy}"
+  case "${HARBORRL_NATIVE_SLIME_CONTRACT}" in
+    legacy)
+      CUSTOM_ARGS+=(
+        --loss-type custom_loss
+        --custom-loss-function-path harborrl.rollout.exporters.native_slime.loss_function
+        --custom-convert-samples-to-train-data-path harborrl.rollout.exporters.native_slime.convert_samples
+      )
+      ;;
+    slime-v032)
+      CUSTOM_ARGS+=(
+        --rollout-function-path harborrl.backends.slime_v032.rollout.generate_rollout
+        --custom-convert-samples-to-train-data-path harborrl.backends.slime_v032.converter.convert_samples_to_train_data
+        --custom-advantage-function-path harborrl.backends.slime_v032.advantage.compute_advantages_and_returns
+        --loss-type custom_loss
+        --custom-loss-function-path harborrl.backends.slime_v032.loss.loss_function
+        --rollout-data-postprocess-path harborrl.backends.slime_v032.postprocess.rollout_data_postprocess
+      )
+      ;;
+    *)
+      echo "[ERROR] unknown HARBORRL_NATIVE_SLIME_CONTRACT: ${HARBORRL_NATIVE_SLIME_CONTRACT}" >&2
+      exit 1
+      ;;
+  esac
 fi
 if [[ "${EXPLORE_ADVANTAGE_BONUS_ENABLED}" == "1" ]]; then
   # Keep the historical hook as the default, while allowing a cluster-job variant to
