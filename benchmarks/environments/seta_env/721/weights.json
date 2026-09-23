@@ -1,5 +1,0 @@
-{
-    "test_venv_imports_and_flask_starts": 0.4,
-    "test_fix_report_exists_with_mappings": 0.3,
-    "test_venv_packages_match_requirements": 0.3
-}

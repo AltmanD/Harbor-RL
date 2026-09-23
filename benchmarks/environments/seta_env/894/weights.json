@@ -1,6 +1,0 @@
-{
-    "test_directory_structure": 0.3,
-    "test_image_extraction_completeness": 0.3,
-    "test_image_format_validation": 0.2,
-    "test_manifest_validation": 0.2
-}

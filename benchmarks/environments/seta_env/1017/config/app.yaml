@@ -1,7 +1,0 @@
-app:
-  name: myservice
-  version: 1.0.0
-  features:
-    - authentication
-    - logging
-    - metrics

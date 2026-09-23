@@ -1,5 +1,0 @@
-{
-    "test_signal_propagation": 0.4,
-    "test_graceful_shutdown_timeout": 0.3,
-    "test_zombie_reaping": 0.3
-}

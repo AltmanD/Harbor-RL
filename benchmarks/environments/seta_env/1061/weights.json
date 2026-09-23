@@ -1,5 +1,0 @@
-{
-    "test_h264_output_valid": 0.35,
-    "test_h265_output_valid": 0.35,
-    "test_vp9_webm_output_valid": 0.30
-}

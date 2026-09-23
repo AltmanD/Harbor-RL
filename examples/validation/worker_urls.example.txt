@@ -1,2 +1,0 @@
-# Copy to local/cluster/worker_urls.txt and replace the endpoint.
-http://worker-host.example:18081
