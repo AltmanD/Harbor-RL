@@ -1,0 +1,40 @@
+schema_version: 1
+datasets:
+  - name: hello_world
+    status: example
+    source: bundled
+    upstream_revision: v0.1-example
+    license: MIT
+    task_root: examples/native/tasks
+    expected_task_count: 1
+    digest_policy: native-inspector-tree-sha256
+    docker_base: debian:bookworm-slim
+    gpu_required: false
+    acceptance: offline-native-contract-only
+    owner: HarborRL maintainers
+
+  - name: terminal-bench-core
+    status: planned
+    source: https://github.com/laude-institute/terminal-bench
+    upstream_revision: TBD
+    license: TBD
+    task_root: TBD
+    expected_task_count: TBD
+    digest_policy: native-inspector-tree-sha256
+    docker_base: task-defined
+    gpu_required: false
+    acceptance: pending-public-worker-matrix
+    owner: HarborRL maintainers
+
+  - name: terminal-bench-test
+    status: planned
+    source: https://github.com/laude-institute/terminal-bench
+    upstream_revision: dataset/terminal-bench-core/v0.1.x
+    license: TBD
+    task_root: TBD
+    expected_task_count: TBD
+    digest_policy: native-inspector-tree-sha256
+    docker_base: task-defined
+    gpu_required: false
+    acceptance: pending-public-worker-matrix
+    owner: HarborRL maintainers

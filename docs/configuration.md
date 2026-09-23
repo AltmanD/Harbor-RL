@@ -1,45 +1,57 @@
-# HarborRL 配置与运行配方
+# Configuration
 
-训练配置直接写在 `examples/training/` 的 recipe 脚本中。每个脚本包含模型、数据集、
-算法、GPU 拓扑和 rollout 配置，环境变量可覆盖默认值；不再经过 Python CLI、配置组合
-或插件 registry。
+Native training uses schema-2 YAML with an exact section and field set. Relative
+paths resolve against the YAML file. `harborrl train --set section.field=value`
+applies YAML-typed values before a second strict validation.
+
+| Section | Field | Requirement |
+| --- | --- | --- |
+| `execution.backend` | fixed | `harbor_job` |
+| `tasks.catalog` | path | nonempty JSON array of immutable task locks |
+| `harness.name` | fixed | `claude_code` |
+| `harness.profile` | path | exact Claude CLI/model/timeout profile |
+| `harbor.python` | path | external Harbor `0.23.0` interpreter |
+| `harbor.workers` | list | nonempty SSH destinations without credentials |
+| `gateway.host` / `port` | network | local Messages listener |
+| `gateway.advertised_url` | origin | plain HTTP(S) origin, no `/v1`, matching port |
+| `gateway.tokenizer_digest` / `template_digest` | SHA-256 | locks serving semantics |
+| `gateway.audited_raw_logprobs` | boolean | must be enabled for RL-ready evidence |
+| `model.checkpoint` / `reference` | paths | HF actor and reference checkpoints |
+| `model.args_file` | name | Slime model preset supplied by `SLIME_DIR` |
+| `training.backend_contract` | fixed | `slime-v0.3.2-native-v1` |
+| `training.num_rollout` / `save_interval` | positive integers | training length and checkpoint cadence |
+| `training.learning_rate` | positive finite number | actor optimizer learning rate |
+| `sampling.group_size` | integer ≥2 | trajectories per prompt group |
+| `sampling.groups_per_batch` | positive integer | complete groups per rollout batch |
+| `sampling.max_attempts` | positive integer | per-slot retry budget |
+| `sampling.max_tokens` / `max_context` | positive integers | `max_tokens < max_context` |
+| `deployment.layout` | enum | `split` or `colocate` |
+| `deployment.num_gpus` / `actor_gpus` / `rollout_gpus` | budget | split layout must not exceed total |
+| `deployment.actor_tensor_parallel_size` | divisor | divides actor GPUs |
+| `deployment.rollout_gpus_per_engine` | divisor | divides rollout GPUs |
+| `output.root` | path | immutable run tree root |
+
+The catalog entry identity is exactly:
+
+```json
+{
+  "id": "task",
+  "revision": "source-revision",
+  "path": "relative/or/absolute-task",
+  "task_digest": "64-hex-sha256",
+  "reward_profile": {"key": "reward", "scale": 1.0, "offset": 0.0, "raw_range": [0, 1]}
+}
+```
+
+## Commands
 
 ```bash
-# 查看最终 Slime 参数，不启动训练
-bash examples/training/train_qwen3_8b_seta_dapo.sh --dry-run
-
-# 在 4-GPU 计算任务内启动完整训练（前台）
-bash examples/training/train_qwen3_8b_seta_dapo.sh
-
-# 显式后台启动
-BACKGROUND=1 bash examples/training/train_qwen3_8b_seta_dapo.sh
+harborrl train --config CONFIG --dry-run
+harborrl doctor --config CONFIG
+harborrl train --config CONFIG
 ```
 
-调用链固定为：
-
-```text
-examples/training/<recipe>.sh
-  -> harborrl/platform/slime_train.sh
-  -> slime/train_async.py
-```
-
-`configs/rollout/` 只保留传给 rollout 的模型模板配置。站点地址、凭据和调度参数应通过
-环境变量或被 Git 忽略的 `local/cluster/` 提供。
-
-离线评测采用同样的 Slime 编排层，但入口不同：通用 benchmark 使用
-`python3 -m tools.evaluation`，需要本地 Ray/worker 的完整配方位于
-`examples/evaluation/`。SETA fixed12 的 4-GPU 一键配方为
-`examples/evaluation/run_qwen3_8b_seta_fixed12_camel_4gpu.sh`，它通过
-`SLIME_ENTRYPOINT=slime/eval_only.py` 运行评测，不执行 actor checkpoint 更新。
-
-部署相关变量按执行环境分层：公共 recipe 只读取 `WORKER_URLS`/
-`WORKER_URLS_FILE` 等运行时变量；站点 RJob/DinD 提交和生命周期脚本保存在
-被 Git 忽略的 `local/rjob/`（本地目录总览见 `local/README.md`），worker
-运行时、资源和运维操作分别见
-`deploy/workers/`、`deploy/runtime/` 与 `deploy/ops/`。
-
-Python 侧的环境变量解析统一在 `harborrl/env.py`（`env_bool` /
-`env_int` / `env_float` / `env_flag` 等）；该模块的 `ENV_VARS` 表是
-rollout 域变量的集中声明（名称 → 含义），新增变量请在此登记。环境
-（数据源）相关的判定集中在 `harborrl/environments/registry.py` 的
-`EnvSpec` 表，无需再散落修改 if-else 分支。
+`doctor` checks external Slime/Megatron/SGLang versions, importability of all
+five adapter hooks, GPU budget, catalog digests, and whether the semantic
+logprob probe remains required. It cannot replace a live GPU one-step acceptance
+run.

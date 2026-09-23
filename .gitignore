@@ -21,75 +21,12 @@ venv/
 # Build and runtime outputs
 build/
 dist/
-build_outputs/
+runs/
 logs/
 wandb/
-/export/
-/runs/
-/analysis/
-/analysis_output/
-/ckpt/
-nohup.out
 
-# Local infrastructure and secrets
-/experiments/**/*job*/
-/experiments/**/*job*.sh
-# pu-dev/operator-only launchers and RJob control-plane helpers are intentionally
-# local and must not be uploaded as deployment code.
-/local/
-# Worker lifecycle/repair scripts under deploy/workers are intentionally
-# tracked.  Site credentials must still stay outside the repository.
-/docs/manual_validation_*.md
-/docs/operations/*job*
-/docs/operations/*workers.md
-/docs/operations/docker_env_*.md
-/examples/validation/internal/
-/examples/validation/*.sh
-/tests/harborrl/test_*job*
-/tests/harborrl/test_*runtime_proxy*
-/tools/infra/*local*worker*state*
-/tools/infra/download_*docker_bundle.py
-/configs/site/local.yaml
-/harborrl/worker_urls*.txt
-swe.pem
-
-# Generated agentic datasets
-/benchmarks/swesmith_convert/
-/benchmarks/swesmith_env/
-/benchmarks/swesmith_smoke/
-/benchmarks/sweverified_convert/
-/benchmarks/sweverified_env/
-/benchmarks/.sweverified_artifact.lock
-# Generated task views belong under runs/, not in benchmark source assets.
-/benchmarks/environments/seta_env_retry/
-
-# Local scratch and historical exports
-/docs/records/
-/harborrl/archive/
-/harborrl/build_outputs/
-/harborrl/logs/
-/tmp_doc_*/
-/workspace/
-# Archived deployment source under deploy/archive/ is intentionally tracked.
-/interview/
-/file
-/=*
-
-# Personal development notes and historical site-specific experiment launchers.
-/docs/HarborRL_0.5MVP_20260920.md
-/docs/HarborRL_next_steps_20260920_zh.md
-/docs/architecture/
-/docs/experiments/
-/docs/h/
-/docs/integration/
-/scripts/rjob.sh
-/scripts/h200_update_probe.py
-/scripts/harbor_six_rt_update_probe.py
-/update_probe.py
-
-# Local 0.5 MVP dataset snapshot, reproduction notes, and snapshot exporter.
-/benchmarks/harbor/0.5-mvp/
-/tools/dev/freeze_harbor_baseline.py
-.venv-harbor-0.23/
-.tools/
-/probe.sh
+# Local task caches and private launch configurations
+harbor_datasets/
+.backends/
+configs/site/
+examples/**/private*

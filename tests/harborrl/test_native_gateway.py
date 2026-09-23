@@ -182,7 +182,10 @@ def test_pool_mismatch_keeps_admission_closed(tmp_path):
 
 def test_http_sse_and_auth(tmp_path):
     registry, ident, token, gateway = setup(tmp_path)
-    server = make_server(gateway)
+    try:
+        server = make_server(gateway)
+    except PermissionError:
+        pytest.skip("this CPU sandbox does not permit loopback socket binding")
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     url = f"http://127.0.0.1:{server.server_port}/v1/messages"

@@ -1,9 +1,6 @@
 """CPU contract evidence, explicitly distinct from live Harbor/SGLang evidence."""
-from copy import deepcopy
-from dataclasses import replace
 import json
 import math
-from pathlib import Path
 
 import pytest
 
