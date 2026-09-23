@@ -24,7 +24,7 @@ dist/
 build_outputs/
 logs/
 wandb/
-export/
+/export/
 /runs/
 /analysis/
 /analysis_output/
