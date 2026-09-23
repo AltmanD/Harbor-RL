@@ -15,7 +15,7 @@
   SSH 复核边界。
 - [branch_management_plan_zh.md](branch_management_plan_zh.md)——MVP 归档、干净移植层、exporter 重构与公开发布的分支策略。
 - [exporter_refactor_plan_zh.md](exporter_refactor_plan_zh.md)——Slime v0.3.2 能力评估、中性 TrainingBatch 与 adapter 技术设计。
-- [public_release_cleanup_plan_zh.md](public_release_cleanup_plan_zh.md)——公开发布双仓模型、白名单目标树、Hub/GPU 决策门与审计清单（现状修订版）。
+- [public_release_cleanup_plan_zh.md](public_release_cleanup_plan_zh.md)——单仓发布路线（refactor → release → main → v0.1）、tracked tree 清理、example 与 README 要求、Hub/GPU 决策门和验收清单。
 - [exporter_v032_dev_status_zh.md](exporter_v032_dev_status_zh.md)——Slime v0.3.2 exporter 重构 dev 分支的中性契约、adapter、CPU 门禁与剩余 GPU 门槛状态。
 - [native_cpu_development_zh.md](native_cpu_development_zh.md)——原生 Claude Code
   CPU/契约开发边界、schema 2 入口、Slime 训练契约测试与 GPU 验证记录。
