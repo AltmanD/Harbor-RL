@@ -16,7 +16,6 @@ dependencies = [
 harborrl = "harborrl.cli:main"
 
 [project.optional-dependencies]
-rollout = ["openai>=1.30"]
 dev = [
   "pytest>=8.0",
   "pytest-asyncio>=0.24",
