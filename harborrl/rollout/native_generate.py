@@ -159,7 +159,8 @@ async def _run_slot(args, runtime_, sample, slot, entry, sampling_digest, policy
                     profile=runtime_.profile,
                     gateway_url=os.environ["HARBORRL_NATIVE_GATEWAY_URL"],
                     runner_python=os.environ["HARBORRL_NATIVE_RUNNER_PYTHON"],
-                    runner_host=workers[attempt_index % len(workers)],
+                    # First attempts spread across workers by slot; a retry shifts to the next worker.
+                    runner_host=workers[(slot + attempt_index) % len(workers)],
                     root=root,
                     registry=runtime_.registry,
                     reward_profile=reward_profile,

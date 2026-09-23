@@ -336,6 +336,67 @@ def test_native_policy_identity_uses_synchronized_pool_version(tmp_path):
         native_generate.current_policy_version(runtime)
 
 
+def test_native_slots_spread_workers_and_shift_retries(tmp_path, monkeypatch):
+    from harborrl.rollout import native_generate
+
+    entry = {"id": "task", "revision": "1", "path": "/task", "task_digest": "d" * 64,
+             "reward_profile": {"key": "reward", "scale": 1.0, "offset": 0.0, "raw_range": [0.0, 1.0]}}
+    profile = tmp_path / "profile.json"
+    profile.write_text(json.dumps({"model": "policy"}))
+    monkeypatch.setenv("RUN_ID", "run")
+    monkeypatch.setenv("HARBORRL_NATIVE_PROFILE", str(profile))
+    monkeypatch.setenv("HARBORRL_NATIVE_RUNNER_WORKERS", json.dumps(["worker-a", "worker-b"]))
+    monkeypatch.setenv("HARBORRL_NATIVE_MAX_ATTEMPTS", "2")
+    monkeypatch.setenv("HARBORRL_NATIVE_GATEWAY_URL", "http://gateway:32123")
+    monkeypatch.setenv("HARBORRL_NATIVE_RUNNER_PYTHON", "/python")
+
+    class FakeSlots:
+        max_attempts = 2
+
+        def __init__(self):
+            self.started = {}
+
+        def start(self, slot):
+            self.started[slot] = self.started.get(slot, 0) + 1
+            return SimpleNamespace(attempt_id=f"{slot}-{self.started[slot]}", group_id="group-0",
+                                   slot_id=slot, attempt_no=self.started[slot])
+
+        def finish(self, slot, ir=None, error=None):
+            assert (ir is None) != (error is None)
+
+    def fake_group_slots(identities, *, max_attempts=2):
+        return FakeSlots()
+
+    calls = []
+
+    async def fake_run_attempt(identity, *, runner_host, **kwargs):
+        calls.append((identity.slot_id, runner_host))
+        if identity.slot_id == "1" and identity.attempt_no == 1:
+            raise RuntimeError("simulated first-attempt failure")
+        return {"identity": identity.__dict__}
+
+    monkeypatch.setattr(native_generate, "GroupSlots", fake_group_slots)
+    monkeypatch.setattr(native_generate, "run_attempt", fake_run_attempt)
+
+    args = SimpleNamespace(n_samples_per_prompt=4, rollout_max_response_len=64)
+    runtime_ = SimpleNamespace(rollout_root=tmp_path, semaphore=asyncio.Semaphore(8),
+                               registry=SimpleNamespace(), profile={"model": "policy"})
+    sample = SimpleNamespace(metadata={"rollout_id": 0, "native_task": entry}, group_index=0)
+
+    async def gather_slots():
+        return await asyncio.gather(*[
+            native_generate._run_slot(args, runtime_, sample, slot, entry, "sampling", "1")
+            for slot in range(4)])
+
+    results = asyncio.run(gather_slots())
+    assert len(results) == 4
+    by_slot = {}
+    for slot, host in calls:
+        by_slot.setdefault(slot, []).append(host)
+    assert by_slot == {"0": ["worker-a"], "1": ["worker-b", "worker-a"],
+                       "2": ["worker-a"], "3": ["worker-b"]}
+
+
 def test_native_dispatch_passes_materialized_prompt_data(tmp_path, monkeypatch):
     path, task = native_config(tmp_path)
     from harborrl.data.harbor.native_inspector import inspect_native
