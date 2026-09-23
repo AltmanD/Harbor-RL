@@ -270,7 +270,8 @@ def dispatch(plan, *, doctor_only=False):
 
     allowed = {"PATH", "HOME", "USER", "LANG", "LC_ALL", "TMPDIR", "LD_LIBRARY_PATH",
                "CUDA_VISIBLE_DEVICES", "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY",
-               "http_proxy", "https_proxy", "no_proxy"}
+               "http_proxy", "https_proxy", "no_proxy", "PYTHONPATH",
+               "SLIME_DIR", "MEGATRON_DIR", "SGLANG_IMAGE"}
     child_env = {key: value for key, value in os.environ.items() if key in allowed}
     child_env["PATH"] = os.pathsep.join(
         [str(Path(sys.executable).parent), child_env.get("PATH", os.defpath)])
