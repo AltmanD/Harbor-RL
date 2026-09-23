@@ -1,20 +1,30 @@
-"""Compare an untouched Harbor verifier with execution through TerminalEnv.
+"""Probe a Harbor task with native Docker verifier semantics.
 
-Run in the worker Python environment. All containers/images created here have
-unique IDs; cleanup never prunes shared Docker resources.
+The legacy TerminalEnv comparison path is intentionally not part of the public
+release.  This probe runs the untouched task verifier twice in isolated
+containers and requires the same scalar reward, which keeps the check aligned
+with the Native Harbor Runner boundary without importing the old environment
+stack.
 """
+from __future__ import annotations
 
-import argparse
 import asyncio
 import json
-import os
 from pathlib import Path
 import subprocess
 import tempfile
 from uuid import uuid4
-from .inspector import inspect, tree_digest, PROFILE, tomllib
-from .materializer import prepare_probe
-from .receipt import parse_reward
+
+from .inspector import inspect, tree_digest
+
+PROFILE = "native-docker-v1"
+
+
+def parse_reward(raw: str) -> dict:
+    value = json.loads(raw)
+    if not isinstance(value, dict) or "reward" not in value:
+        raise ValueError("verifier must emit a JSON object with a reward key")
+    return value
 
 
 def docker(*args, timeout=900):
@@ -27,30 +37,13 @@ def docker(*args, timeout=900):
     ).stdout
 
 
-async def probe(source: Path, dataset: str, work: Path) -> dict:
-    from harborrl.environments.terminal.runtime import TerminalEnv
-    from harborrl.types import TaskSpec, RunContext, TaskTimeouts
-
-    report = inspect(source, dataset)
-    if report.status != "NEEDS_PROBE":
-        raise ValueError(f"{report.status}: {report.reasons}")
-    receipt = {
-        "source_digest": report.ref.source_digest,
-        "profile": PROFILE,
-        "execution_backend": "terminal_env",
-        "success": False,
-    }
+async def _run_verifier(source: Path, work: Path) -> float:
     uid = uuid4().hex
     image, container = "harborrl-probe:" + uid, "harborrl-probe-" + uid
-    env = TerminalEnv(harbor_probe=True)
-    old_dataset_dir = os.environ.get("DATASET_DIR")
     try:
-        # Native layout keeps the original environment/ context and /tests path.
         await asyncio.to_thread(docker, "build", "-t", image, source / "environment")
-        environment = tomllib.loads((source / "task.toml").read_text()).get(
-            "environment", {}
-        )
         run_args = ["run", "-d", "--name", container]
+        environment = _task_environment(source)
         if "cpus" in environment:
             run_args += ["--cpus", str(environment["cpus"])]
         if "memory_mb" in environment:
@@ -69,61 +62,60 @@ async def probe(source: Path, dataset: str, work: Path) -> dict:
         try:
             await asyncio.to_thread(
                 docker,
-                "exec",
-                "-u",
-                "root",
-                container,
-                "sh",
-                "-c",
+                "exec", "-u", "root", container, "sh", "-c",
                 "mkdir -p /logs/verifier; rm -f /logs/verifier/reward.txt; bash /tests/test.sh",
             )
         except subprocess.CalledProcessError:
-            # A task failure may still have a valid scalar receipt.
             pass
         raw = await asyncio.to_thread(
             docker, "exec", container, "cat", "/logs/verifier/reward.txt"
         )
-        receipt["native_reward"] = parse_reward(raw)["raw_reward"]
+        return parse_reward(raw)["reward"]
+    finally:
+        for args in (("rm", "-f", container), ("image", "rm", image)):
+            try:
+                await asyncio.to_thread(docker, *args, timeout=60)
+            except (subprocess.SubprocessError, OSError):
+                pass
+
+
+def _task_environment(source: Path):
+    import tomllib
+
+    return tomllib.loads((source / "task.toml").read_text()).get("environment", {})
+
+
+async def probe(source: Path, dataset: str, work: Path) -> dict:
+    report = inspect(source, dataset)
+    if report.status != "NEEDS_PROBE":
+        raise ValueError(f"{report.status}: {report.reasons}")
+    receipt = {
+        "source_digest": report.ref.source_digest,
+        "profile": PROFILE,
+        "execution_backend": "native_docker",
+        "success": False,
+    }
+    try:
         with tempfile.TemporaryDirectory(prefix="harbor-probe-", dir=work) as temp:
-            row = prepare_probe(source, dataset, Path(temp) / "tasks")
-            meta = row["metadata"]
-            os.environ["DATASET_DIR"] = str(Path(temp) / "tasks")
-            await env.reset(
-                task_meta=meta,
-                task_spec=TaskSpec(
-                    meta["task_name"], meta["task_path"], meta["instruction"]
-                ),
-                run_ctx=RunContext(uid, 0, 0, Path(temp) / "logs"),
-                timeouts=TaskTimeouts(),
-            )
-            receipt["materialized_reward"] = await env.evaluate()
-            await env.close()
+            first = await _run_verifier(source, Path(temp))
+            second = await _run_verifier(source, Path(temp))
+        receipt["native_reward"] = first
+        receipt["repeat_reward"] = second
         if tree_digest(source) != receipt["source_digest"]:
             raise ValueError("source changed during probe")
-        receipt["success"] = receipt["native_reward"] == receipt["materialized_reward"]
+        receipt["success"] = first == second
         if not receipt["success"]:
-            receipt["error"] = "verifier reward mismatch"
+            receipt["error"] = "verifier reward is not deterministic"
     except Exception as exc:
         receipt["error"] = f"{type(exc).__name__}: {exc}"
         if isinstance(exc, subprocess.CalledProcessError):
             receipt["stderr"] = exc.stderr
-    finally:
-        try:
-            await env.close()
-        finally:
-            for args in (("rm", "-f", container), ("image", "rm", image)):
-                try:
-                    await asyncio.to_thread(docker, *args, timeout=60)
-                except (subprocess.SubprocessError, OSError):
-                    pass
-    if old_dataset_dir is None:
-        os.environ.pop("DATASET_DIR", None)
-    else:
-        os.environ["DATASET_DIR"] = old_dataset_dir
     return receipt
 
 
 def main():
+    import argparse
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dataset", required=True)
     parser.add_argument("--task", required=True, type=Path)
@@ -135,8 +127,8 @@ def main():
         probe(args.task.resolve(), args.dataset, args.work_dir.resolve())
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    with args.output.open("x") as f:
-        json.dump({args.task.name: result}, f, indent=2)
+    with args.output.open("x") as stream:
+        json.dump({args.task.name: result}, stream, indent=2)
     if not result["success"]:
         raise SystemExit(result.get("error", "probe failed"))
 

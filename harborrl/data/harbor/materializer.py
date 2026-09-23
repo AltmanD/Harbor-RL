@@ -12,7 +12,22 @@ except ModuleNotFoundError:  # Python 3.10
     import tomli as tomllib
 import yaml
 from .inspector import inspect, tree_digest, PROFILE, REWARD_PROFILE
-from harborrl.data.convert_tb21_to_terminal_env import COMPOSE_TEMPLATE
+COMPOSE_TEMPLATE = """# You usually don't need to modify anything in this file, but you can use it to add
+# more containers or configure the client container, if needed.
+
+services:
+  client:
+    build:
+      dockerfile: Dockerfile
+    image: ${T_BENCH_TASK_DOCKER_CLIENT_IMAGE_NAME}
+    container_name: ${T_BENCH_TASK_DOCKER_CLIENT_CONTAINER_NAME}
+    command: [ "sh", "-c", "sleep infinity" ]
+    environment:
+      - TEST_DIR=${T_BENCH_TEST_DIR}
+    volumes:
+      - ${T_BENCH_TASK_LOGS_PATH}:${T_BENCH_CONTAINER_LOGS_PATH}
+      - ${T_BENCH_TASK_AGENT_LOGS_PATH}:${T_BENCH_CONTAINER_AGENT_LOGS_PATH}
+"""
 
 
 def materialize(source: Path, dataset: str, root: Path, receipt: dict) -> dict:
