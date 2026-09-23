@@ -4,7 +4,8 @@
 # Required environment (normally provided by `harborrl train --config ...`):
 #   SLIME_DIR, ROLLOUT_PROMPT_DATA, HF_CKPT, REF_LOAD, MODEL_ARGS_FILE,
 #   RUN_DIR, CKPT_ROOT, NUM_GPUS, ACTOR_GPUS, ROLLOUT_GPUS, TP_SIZE,
-#   ROLLOUT_NUM_GPUS_PER_ENGINE, HARBORRL_GPU_LAYOUT
+#   ROLLOUT_NUM_GPUS_PER_ENGINE, HARBORRL_GPU_LAYOUT,
+#   HARBORRL_NATIVE_SLIME_CONTRACT
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -12,6 +13,8 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 die() { echo "[ERROR] $*" >&2; exit 1; }
 
 : "${SLIME_DIR:?SLIME_DIR must point to the official Slime v0.3.2 checkout}"
+[[ "${HARBORRL_NATIVE_SLIME_CONTRACT:-}" == "slime-v032" ]] \
+  || die "HARBORRL_NATIVE_SLIME_CONTRACT must be slime-v032"
 SLIME_DIR="$(cd "${SLIME_DIR}" && pwd)"
 [ -f "${SLIME_DIR}/train.py" ] || die "Slime entrypoint not found: ${SLIME_DIR}/train.py"
 
