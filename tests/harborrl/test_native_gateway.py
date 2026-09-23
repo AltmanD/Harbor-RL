@@ -114,6 +114,41 @@ def test_session_audit_covers_final_response(tmp_path):
     assert turns[0]["delivery"] == "consumed_confirmed"
 
 
+def test_session_audit_merges_split_assistant_blocks(tmp_path):
+    class MultiBlockBackend(Backend):
+        def generate(self, converted, ident, response_id):
+            turn = super().generate(converted, ident, response_id)
+            turn["content"] = [*turn["content"], {"type": "text", "text": "tail"}]
+            return turn
+
+    registry, ident, token, gateway = setup(tmp_path)
+    gateway.backend = MultiBlockBackend()
+    aid, message = gateway.generate(token, payload())
+    registry.delivery(aid, message["id"], "sent")
+    assert len(message["content"]) == 2
+    session = tmp_path / "session.jsonl"
+    session.write_text("".join(
+        json.dumps({"sessionId": "session", "type": "assistant", "message": part}) + "\n"
+        for part in ({**message, "content": [block]} for block in message["content"])))
+    audited = audit_session(session, registry, aid)
+    assert audited["consumed_response_ids"] == [message["id"]]
+    registry.close(aid)
+    assert registry.seal(aid)[1]["errors"] == []
+
+
+def test_session_audit_rejects_blocks_the_gateway_never_served(tmp_path):
+    registry, ident, token, gateway = setup(tmp_path)
+    aid, message = gateway.generate(token, payload())
+    registry.delivery(aid, message["id"], "sent")
+    forged = {**message, "content": [{"type": "text", "text": "different"}]}
+    session = tmp_path / "session.jsonl"
+    session.write_text("".join(
+        json.dumps({"sessionId": "session", "type": "assistant", "message": part}) + "\n"
+        for part in (message, forged)))
+    with pytest.raises(ValueError, match="differs"):
+        audit_session(session, registry, aid)
+
+
 def test_unknown_auxiliary_request_poison_seal(tmp_path):
     registry, ident, token, gateway = setup(tmp_path)
     with pytest.raises(ProtocolError):
