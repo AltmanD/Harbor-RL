@@ -208,3 +208,44 @@ deployment:              # 布局不变
 3. 最终 checkpoint 转换 HF 后与基线 diff 非零（变化元素 ≥1e8 量级）；
 4. wait_time_ratio <35% 且无 cleanup-required / trace-unsealed 残留；
 5. 产出验收 JSON + 更新 leadership report 的“实际接入过”清单。
+
+## 10. 2026-09-23 执行调整（用户确认）
+
+按最新决策收敛执行范围：
+
+1. **目标是覆盖更多 dataset 而非更多 task**：从 15 个新数据集各选 1 个任务，
+   加上复用已有执行锁的 `bigcode/humanevalfix`，共 **16 个数据集 × 各 1 任务**。
+   选择依据（非难度）：静态 NEEDS_PROBE、缓存有源码、有官方 solution、
+   镜像依赖简单（python slim / ubuntu 系）、体量小。
+2. **不做难度探测，只测连通性**：每任务在两台 worker 上跑 baseline（期望 reward=0）
+   与 solution（期望 reward=1）容器验证，即镜像 + verifier + reward artifact 连通。
+3. **并行度固定 8+8**：`groups_per_batch=8 × group_size=2`，共 16 个并发 trial
+   （两台 worker 各 8），num_rollout=2 覆盖全部 16 个数据集。
+
+已选任务清单（详见 `runs/native-mvp-20260923-multids/tasks.json`）：
+
+| 数据集 | 任务 ID | 镜像 base |
+|---|---|---|
+| nvats/codeskills-bench | codeskills | python:3.11-slim |
+| quixbugs/quixbugs | quixbugs | python:3.11-slim |
+| adyen/dabstep | dabstep | t-bench/ubuntu-24-04 |
+| aider/aider-polyglot | aiderpoly | buildpack-deps:jammy |
+| deveval/deveval | deveval | t-bench/deveval |
+| evoeval/evoeval | evoeval | python:3.13-slim |
+| abundant/swe-gen-cpp | swegencpp | ubuntu:24.04 |
+| aarr/aarri-bench | aarri | ubuntu:24.04 |
+| camel-ai/seta-env | setaenv | ubuntu:24.04 |
+| apple/mmau | mmau | python:3.13-slim |
+| arcprize/arc-agi-2 | arcagi | python:3.11-slim |
+| gaia/gaia | gaia | python:3.11-slim |
+| gorilla/bfcl | bfcl | python:3.10-slim |
+| crustbench/crustbench | crustbench | rust:1.83-slim |
+| bauerjustin/terminal-bench-3-test | tb3test | ubuntu:24.04 |
+| bigcode/humanevalfix | humanevalfix1（复用 09-22 锁与镜像） | 已构建 |
+
+GPU 机器到位前完成的准备（无需 GPU）：任务源复制与执行锁（16 个，全部
+NEEDS_PROBE）、双 worker 镜像构建、双机 baseline/solution 连通验证、
+catalog/config/dry-run、107G 旧 checkpoint retire（ipfs 恢复 ~197G）、
+一键启动脚本 `runs/native-mvp-20260923-multids/launch.sh`
+（自动探测 GPU 机 routable IP 并改写 advertised_url → worker SSH/镜像探测 →
+ray 清理 → doctor/dry-run → 监控 → 启动训练，支持 `--preflight-only`）。

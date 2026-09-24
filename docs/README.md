@@ -10,9 +10,6 @@
 - [native_mvp_reward_contrast_result_zh.md](native_mvp_reward_contrast_result_zh.md)——
   2026-09-22 最终 reward 0/1 对比、非零 advantage/gradient/PG loss、显式
   权重变化与 updated checkpoint 重载证据；Native MVP 验收闭环。
-- [native_mvp_clean_branch_verification_zh.md](native_mvp_clean_branch_verification_zh.md)——
-  clean `feat/harborrl-mvp` 分支提交切分、99 项回归、doctor/dry-run 与 GPU
-  SSH 复核边界。
 - [native_cpu_development_zh.md](native_cpu_development_zh.md)——原生 Claude Code
   CPU/契约开发边界、schema 2 入口、Slime 训练契约测试与 GPU 验证记录。
 - [architecture.md](architecture.md)——包边界、主链路与扩展点（环境注册表、
