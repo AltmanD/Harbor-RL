@@ -1,8 +1,8 @@
 """Small, dependency-free contract for a synchronized inference pool."""
 import json
 import os
-from pathlib import Path
 import time
+from pathlib import Path
 
 
 def validate_pool(states, expected=None):

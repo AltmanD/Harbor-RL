@@ -10,9 +10,9 @@ from __future__ import annotations
 
 import asyncio
 import json
-from pathlib import Path
 import subprocess
 import tempfile
+from pathlib import Path
 from uuid import uuid4
 
 from .inspector import inspect, tree_digest
@@ -106,7 +106,7 @@ async def probe(source: Path, dataset: str, work: Path) -> dict:
         receipt["success"] = first == second
         if not receipt["success"]:
             receipt["error"] = "verifier reward is not deterministic"
-    except Exception as exc:
+    except (OSError, ValueError, subprocess.SubprocessError) as exc:
         receipt["error"] = f"{type(exc).__name__}: {exc}"
         if isinstance(exc, subprocess.CalledProcessError):
             receipt["stderr"] = exc.stderr

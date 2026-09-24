@@ -11,12 +11,12 @@ import importlib
 import importlib.metadata
 import json
 import os
-from pathlib import Path
 import shutil
 import signal
 import subprocess
 import sys
 import time
+from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -97,7 +97,11 @@ def doctor(plan):
             version = None
         checks.append({"dependency": package, "version": version, "ok": version is not None})
 
-    from harborrl.backends.slime_v032.versions import MEGATRON_COMMIT, SLIME_COMMIT, SGLANG_IMAGE_TAG
+    from harborrl.backends.slime_v032.versions import (
+        MEGATRON_COMMIT,
+        SGLANG_IMAGE_TAG,
+        SLIME_COMMIT,
+    )
     slime_dir = os.environ.get("SLIME_DIR", "").strip()
     slime_path = Path(slime_dir) if slime_dir else None
     checks.append({"path": "SLIME_DIR", "ok": bool(slime_path and slime_path.is_dir()),

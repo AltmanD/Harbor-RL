@@ -8,8 +8,8 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-from pathlib import Path
 import secrets
+from pathlib import Path
 
 from harborrl.rollout.harbor_job.coordinator import GroupSlots, run_attempt
 from harborrl.trajectories.native import Identity, RewardProfile, digest, read_json
@@ -17,10 +17,11 @@ from harborrl.trajectories.native import Identity, RewardProfile, digest, read_j
 
 class NativeRolloutRuntime:
     def __init__(self, args):
+        from slime.utils.processing_utils import load_tokenizer
+
         from harborrl.gateway.server import Gateway, make_server
         from harborrl.gateway.sglang_backend import SGLangBackend
         from harborrl.gateway.trace import TraceRegistry
-        from slime.utils.processing_utils import load_tokenizer
 
         self.args = args
         self.run_root = Path(os.environ["RUN_DIR"]).resolve()
@@ -198,7 +199,7 @@ async def _run_slot(
                     reward_profile=reward_profile,
                     max_output_tokens=int(args.rollout_max_response_len),
                 )
-        except Exception as exc:
+        except (OSError, ValueError, RuntimeError, asyncio.TimeoutError) as exc:
             slots.finish(str(slot), error=f"{type(exc).__name__}: {exc}")
             continue
         slots.finish(str(slot), ir)

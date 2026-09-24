@@ -4,17 +4,19 @@ stdin: submit request, then {"command":"run"}, optionally {"command":"cancel"}.
 stdout: JSON prepared/events/terminal only. No credentials in emitted records.
 """
 from __future__ import annotations
+
 import argparse
 import asyncio
 import contextlib
 import importlib.metadata
 import json
-from pathlib import Path
 import signal
 import sys
+from pathlib import Path
 
 from harborrl.data.harbor.native_inspector import inspect_native
 from harborrl.trajectories.native import Identity, digest, publish
+
 from .bindings import claude_config
 
 
@@ -35,8 +37,8 @@ def probe():
 async def execute(request, emit, read_command):
     probe()
     from harbor.models.trial.config import TrialConfig
-    from harbor.trial.trial import Trial
     from harbor.trial.hooks import TrialEvent
+    from harbor.trial.trial import Trial
 
     identity = Identity(**request["identity"])
     if digest(request["profile"]) != identity.harness_digest:

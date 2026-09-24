@@ -1,14 +1,22 @@
 """Reproducible synthetic transport-to-export check; never produces RL evidence."""
-from dataclasses import replace
 import json
-from pathlib import Path
 import threading
+from dataclasses import replace
+from pathlib import Path
 from urllib import request
 
 from harborrl.gateway.server import Gateway, make_server
 from harborrl.gateway.trace import TraceRegistry
-from harborrl.trajectories.native import Identity, RewardProfile, assemble, digest, publish, require_ready
 from harborrl.rollout.exporters.native import export_group
+from harborrl.trajectories.native import (
+    Identity,
+    RewardProfile,
+    assemble,
+    digest,
+    publish,
+    require_ready,
+)
+
 from .audit import audit_session
 from .collector import collect
 
@@ -57,7 +65,9 @@ def smoke(output):
                     message = json.load(response)
                 # Wait for the server-side delivery record, not just receipt of HTTP bytes.
                 with registry.changed:
-                    if not registry.changed.wait_for(lambda: not registry.attempts[identity.attempt_id]["pending"], timeout=5):
+                    if not registry.changed.wait_for(
+                        lambda identity=identity: not registry.attempts[identity.attempt_id]["pending"], timeout=5
+                    ):
                         raise TimeoutError("synthetic response delivery did not drain")
                 events.append({"sessionId": trial, "type": "assistant", "message": message})
             session.write_text("".join(json.dumps(e) + "\n" for e in events))

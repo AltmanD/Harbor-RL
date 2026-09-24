@@ -4,19 +4,27 @@ import math
 
 import pytest
 
-from harborrl.trajectories.native import Identity, RewardProfile, assemble, digest, publish, read_json, require_ready, validate_v2
-from harborrl.rollout.harbor_job.collector import collect
 from harborrl.rollout.exporters.native import export_group
-
+from harborrl.rollout.harbor_job.collector import collect
+from harborrl.trajectories.native import (
+    Identity,
+    RewardProfile,
+    assemble,
+    digest,
+    publish,
+    read_json,
+    require_ready,
+    validate_v2,
+)
 
 SAMPLING = {"temperature": 1.0, "top_p": 1.0, "top_k": -1, "max_new_tokens": 64, "stop": []}
 
 
 def identity(slot="0", **overrides):
-    values = dict(run_id="run", batch_id="batch", group_id="group", slot_id=slot,
-                  attempt_id="attempt-" + slot, trajectory_id="trajectory-" + slot,
-                  task_digest="task", policy_version="1", harness_digest="claude",
-                  reward_digest=RewardProfile().digest, sampling_digest=digest(SAMPLING))
+    values = {"run_id": "run", "batch_id": "batch", "group_id": "group", "slot_id": slot,
+              "attempt_id": "attempt-" + slot, "trajectory_id": "trajectory-" + slot,
+              "task_digest": "task", "policy_version": "1", "harness_digest": "claude",
+              "reward_digest": RewardProfile().digest, "sampling_digest": digest(SAMPLING)}
     return Identity(**{**values, **overrides})
 
 

@@ -1,8 +1,8 @@
 """Convert Native IR samples into Slime v0.3.2 standard training fields."""
 from __future__ import annotations
 
-from collections import defaultdict
 import math
+from collections import defaultdict
 
 from harborrl.export.native import export_training_batch
 from harborrl.trajectories.native import Identity, finite, read_json, require_ready
@@ -101,15 +101,14 @@ def convert_samples_to_train_data(args, samples):
     if set(spans) != set(turn_samples):
         raise ValueError("incomplete native turns or mixed policy batch")
     data = {field: [] for field in STANDARD_FIELDS}
-    running_index = 0
-    for (group_key, trajectory_id, turn_index), sample in sorted(
+    for running_index, ((group_key, trajectory_id, turn_index), sample) in enumerate(sorted(
         turn_samples.items(),
         key=lambda item: (
             units[item[0][:2]][0].rollout_id,
             _slot_rank(_trajectory_slot(turn_samples[item[0]])),
             item[0][2],
         ),
-    ):
+    )):
         unit, _group = units[(group_key, trajectory_id)]
         span = spans[(group_key, trajectory_id, turn_index)][1]
         metadata = sample.metadata
@@ -132,7 +131,6 @@ def convert_samples_to_train_data(args, samples):
         data["loss_masks"].append(response_mask)
         data["rollout_log_probs"].append(list(span.old_logprobs))
         data["rollout_mask_sums"].append(unit.token_count)
-        running_index += 1
     for group in batch.groups:
         weight_sum = math.fsum(
             1.0 / (group.group_size * unit.token_count)

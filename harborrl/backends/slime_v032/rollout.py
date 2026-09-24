@@ -26,7 +26,7 @@ def assert_locked_policy_versions(ir_groups, policy_version):
     for group in ir_groups:
         for ir in group:
             if not isinstance(ir, dict):
-                raise ValueError("native rollout did not return trajectory evidence")
+                raise TypeError("native rollout did not return trajectory evidence")
             version = ir.get("identity", {}).get("policy_version")
             if policy_version is not None and version != policy_version:
                 raise ValueError("native rollout observed a stale policy version")
@@ -51,7 +51,7 @@ async def run_native_groups(args, groups, policy_version, rollout_id):
             metadata = getattr(sample, "metadata", None)
             ir = metadata.get("native_ir") if isinstance(metadata, dict) else None
             if not isinstance(ir, dict):
-                raise ValueError("native rollout did not return trajectory evidence")
+                raise TypeError("native rollout did not return trajectory evidence")
             trajectories.append(ir)
         ir_groups.append(trajectories)
     assert_locked_policy_versions(ir_groups, policy_version)

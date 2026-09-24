@@ -3,7 +3,14 @@ from __future__ import annotations
 
 import math
 
-from harborrl.export.contract import REDUCTION, SCHEMA_VERSION, TokenSpan, TrainingBatch, TrainingGroup, TrajectoryTrainingUnit
+from harborrl.export.contract import (
+    REDUCTION,
+    SCHEMA_VERSION,
+    TokenSpan,
+    TrainingBatch,
+    TrainingGroup,
+    TrajectoryTrainingUnit,
+)
 from harborrl.export.validate import validate_batch
 from harborrl.trajectories.native import Identity, finite, require_ready
 

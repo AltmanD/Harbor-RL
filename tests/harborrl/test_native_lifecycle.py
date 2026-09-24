@@ -1,20 +1,19 @@
 """CPU lifecycle failures: no Harbor, Docker or GPU needed."""
 import asyncio
-from dataclasses import replace
 import json
 import sys
+from dataclasses import replace
 
 import pytest
+from test_native_contracts import identity
 
 from harborrl.gateway.trace import TraceRegistry
 from harborrl.rollout.harbor_job.bindings import claude_config, sanitized_runner_env
 from harborrl.rollout.harbor_job.coordinator import GroupSlots, run_attempt
 from harborrl.trajectories.native import RewardProfile
-from test_native_contracts import identity
 
-
-PROFILE = dict(cli_version="2.1.0", model="policy", max_turns=4,
-               agent_timeout_sec=60, setup_timeout_sec=60, verifier_timeout_sec=60)
+PROFILE = {"cli_version": "2.1.0", "model": "policy", "max_turns": 4,
+           "agent_timeout_sec": 60, "setup_timeout_sec": 60, "verifier_timeout_sec": 60}
 
 
 def test_credential_cannot_rebind_another_attempt(tmp_path):
@@ -80,6 +79,7 @@ def test_runner_can_be_dispatched_to_external_worker():
 
 def test_real_runner_source_compiles():
     import py_compile
+
     from harborrl.rollout.harbor_job import runner
     py_compile.compile(runner.__file__, doraise=True)
 

@@ -5,7 +5,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 
-__all__ = ["ROOT", "load_config", "launch_plan"]
+__all__ = ["ROOT", "launch_plan", "load_config"]
 
 
 def load_config(path, overrides=None):

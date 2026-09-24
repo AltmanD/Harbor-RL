@@ -1,17 +1,19 @@
 """Publish a task without changing its verifier or Docker build context."""
 
-from dataclasses import asdict
 import json
-from pathlib import Path
 import shutil
 import tempfile
+from dataclasses import asdict
+from pathlib import Path
 
 try:
     import tomllib
 except ModuleNotFoundError:  # Python 3.10
     import tomli as tomllib
 import yaml
-from .inspector import inspect, tree_digest, PROFILE, REWARD_PROFILE
+
+from .inspector import PROFILE, REWARD_PROFILE, inspect, tree_digest
+
 COMPOSE_TEMPLATE = """# You usually don't need to modify anything in this file, but you can use it to add
 # more containers or configure the client container, if needed.
 

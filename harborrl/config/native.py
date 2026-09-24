@@ -1,10 +1,10 @@
 """Strict native schema 2; local paths resolve relative to the config file."""
-import os
 import json
+import os
+import re
+import sys
 from pathlib import Path
 from urllib.parse import urlsplit
-import sys
-import re
 
 import yaml
 
@@ -28,7 +28,7 @@ def load_config(path, overrides=None):
     path = Path(path).resolve()
     config = yaml.safe_load(path.read_text())
     if not isinstance(config, dict):
-        raise ValueError('configuration must be a mapping')
+        raise TypeError('configuration must be a mapping')
     if config.get('schema_version') != 2:
         raise ValueError('native configuration requires schema_version: 2')
     validate(config, path)
@@ -67,8 +67,8 @@ def validate(config, path):
         for key in keys:
             if type(config[section][key]) is not int or config[section][key] <= 0:
                 raise ValueError(f'{section}.{key} must be a positive integer')
-    from harborrl.trajectories.native import finite
     from harborrl.backends.slime_v032.versions import CONFIG_CONTRACTS
+    from harborrl.trajectories.native import finite
     if config['training']['backend_contract'] not in CONFIG_CONTRACTS:
         raise ValueError(f"training.backend_contract must be one of {sorted(CONFIG_CONTRACTS)}")
     if not finite(config['training']['learning_rate']) or config['training']['learning_rate'] <= 0:
@@ -110,8 +110,8 @@ def validate(config, path):
 
 
 def catalog(config):
-    from harborrl.trajectories.native import read_json
     from harborrl.data.harbor.native_inspector import inspect_native
+    from harborrl.trajectories.native import read_json
     path = Path(config['tasks']['catalog'])
     entries = read_json(path)
     if not isinstance(entries,list) or not entries:
@@ -138,8 +138,8 @@ def catalog(config):
 
 
 def launch_plan(config):
-    from harborrl.config import ROOT
     from harborrl.backends.slime_v032.versions import runtime_contract_id
+    from harborrl.config import ROOT
     catalog(config)
     c = config
     environment = {

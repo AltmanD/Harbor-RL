@@ -1,6 +1,7 @@
 """Strict text/tool subset of Anthropic Messages and buffered SSE encoding."""
 import json
 import re
+
 from harborrl.trajectories.native import finite
 
 
@@ -139,8 +140,8 @@ def parse_qwen_output(text, *, response_id, tools):
         raise ProtocolError("thinking output is not enabled by this profile")
     names = {tool["function"]["name"] for tool in tools}
     blocks, offset = [], 0
-    matches = list(re.finditer(r"<tool_call>\s*(.*?)\s*</tool_call>", text, re.S))
-    remainder = re.sub(r"<tool_call>\s*(.*?)\s*</tool_call>", "", text, flags=re.S)
+    matches = list(re.finditer(r"<tool_call>\s*(.*?)\s*</tool_call>", text, re.DOTALL))
+    remainder = re.sub(r"<tool_call>\s*(.*?)\s*</tool_call>", "", text, flags=re.DOTALL)
     if "<tool_call>" in remainder or "</tool_call>" in remainder:
         raise ProtocolError("incomplete tool call")
     for index, match in enumerate(matches):

@@ -8,19 +8,25 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from test_native_contracts import identity, make_ir
 
 from harborrl.backends.slime_v032 import launcher as v032_launcher
 from harborrl.backends.slime_v032 import versions as v032_versions
 from harborrl.backends.slime_v032.advantage import compute_advantages_and_returns
-from harborrl.backends.slime_v032.converter import STANDARD_FIELDS, convert_samples_to_train_data
-from harborrl.backends.slime_v032.loss import LOSS_SCALE_CORRECTION, clipped_pg_loss_pure
+from harborrl.backends.slime_v032.converter import (
+    STANDARD_FIELDS,
+    convert_samples_to_train_data,
+)
+from harborrl.backends.slime_v032.loss import (
+    LOSS_SCALE_CORRECTION,
+    clipped_pg_loss_pure,
+)
 from harborrl.backends.slime_v032.postprocess import rollout_data_postprocess
 from harborrl.backends.slime_v032.rollout import generate_rollout, to_slime_samples
 from harborrl.export import contract as export_contract
 from harborrl.export.native import export_training_batch
 from harborrl.export.validate import batch_weight_sum
 from harborrl.trajectories.native import digest
-from test_native_contracts import identity, make_ir
 
 
 def real_evidence(ir):
@@ -288,7 +294,7 @@ def test_versions_and_doctor_contract():
 def test_launcher_hooks_resolve_and_dry_run():
     arguments = v032_launcher.hook_arguments()
     assert "--rollout-function-path" in arguments
-    assert arguments.count("--loss-type custom_loss".split()[0]) == 1
+    assert arguments.count(["--loss-type", "custom_loss"][0]) == 1
     flags = dict(zip(arguments[::2], arguments[1::2]))
     assignment = {
         "rollout": flags["--rollout-function-path"],

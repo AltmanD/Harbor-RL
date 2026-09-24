@@ -1,10 +1,12 @@
 """Bounded stdlib HTTP transport. All policy requests require attempt credentials."""
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import secrets
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
-from .messages import ProtocolError, convert, sse_events
+
 from harborrl.trajectories.native import digest, encode
+
+from .messages import ProtocolError, convert, sse_events
 
 
 class Gateway:

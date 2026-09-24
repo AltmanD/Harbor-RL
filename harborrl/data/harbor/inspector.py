@@ -1,8 +1,9 @@
 """Conservative inspection of pinned local Harbor tasks."""
 
-from dataclasses import asdict, dataclass
 import hashlib
+from dataclasses import asdict, dataclass
 from pathlib import Path
+
 from .receipt import parse_reward
 
 try:
@@ -58,13 +59,13 @@ def inspect(task: Path, dataset: str, receipt: dict | None = None) -> Inspection
         spec = tomllib.loads((task / "task.toml").read_text())
         for section in ("environment", "agent", "verifier"):
             if not isinstance(spec.get(section, {}), dict):
-                raise ValueError("invalid section: " + section)
+                raise TypeError("invalid section: " + section)
         for name in ("instruction.md", "environment/Dockerfile", "tests/test.sh"):
             if not (task / name).is_file():
                 return Inspection(ref, "INVALID", ["missing:" + name], {})
         if not (task / "instruction.md").read_text().strip():
             return Inspection(ref, "INVALID", ["empty_instruction"], {})
-    except (OSError, ValueError) as exc:
+    except (OSError, TypeError, ValueError) as exc:
         return Inspection(ref, "INVALID", [str(exc)], {})
     env = spec.get("environment", {})
     resources = {

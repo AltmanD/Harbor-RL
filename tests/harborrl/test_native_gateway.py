@@ -1,15 +1,20 @@
 import json
 import threading
-from urllib import request, error
 from types import SimpleNamespace
+from urllib import error, request
 
 import pytest
+from test_native_contracts import identity
 
-from harborrl.gateway.messages import ProtocolError, convert, parse_qwen_output, sse_events
+from harborrl.gateway.messages import (
+    ProtocolError,
+    convert,
+    parse_qwen_output,
+    sse_events,
+)
 from harborrl.gateway.server import Gateway, make_server
 from harborrl.gateway.trace import TraceRegistry
 from harborrl.rollout.harbor_job.audit import audit_session
-from test_native_contracts import identity
 
 
 def payload(**changes):
@@ -88,11 +93,11 @@ def test_model_output_never_repaired(text):
 
 
 def test_trace_requires_actual_consumption_and_is_immutable(tmp_path):
-    registry, ident, token, gateway = setup(tmp_path)
+    registry, _ident, token, gateway = setup(tmp_path)
     aid, message = gateway.generate(token, payload())
     registry.delivery(aid, message["id"], "sent")
     registry.close(aid)
-    turns, seal = registry.seal(aid)
+    _turns, seal = registry.seal(aid)
     assert seal["errors"] == ["unconfirmed_consumption"]
     with pytest.raises(ValueError, match="sealed"):
         registry.consume(aid, message["id"], message["content"], "session")
@@ -101,7 +106,7 @@ def test_trace_requires_actual_consumption_and_is_immutable(tmp_path):
 
 
 def test_session_audit_covers_final_response(tmp_path):
-    registry, ident, token, gateway = setup(tmp_path)
+    registry, _ident, token, gateway = setup(tmp_path)
     aid, message = gateway.generate(token, payload())
     registry.delivery(aid, message["id"], "sent")
     session = tmp_path / "session.jsonl"
@@ -121,7 +126,7 @@ def test_session_audit_merges_split_assistant_blocks(tmp_path):
             turn["content"] = [*turn["content"], {"type": "text", "text": "tail"}]
             return turn
 
-    registry, ident, token, gateway = setup(tmp_path)
+    registry, _ident, token, gateway = setup(tmp_path)
     gateway.backend = MultiBlockBackend()
     aid, message = gateway.generate(token, payload())
     registry.delivery(aid, message["id"], "sent")
@@ -137,7 +142,7 @@ def test_session_audit_merges_split_assistant_blocks(tmp_path):
 
 
 def test_session_audit_rejects_blocks_the_gateway_never_served(tmp_path):
-    registry, ident, token, gateway = setup(tmp_path)
+    registry, _ident, token, gateway = setup(tmp_path)
     aid, message = gateway.generate(token, payload())
     registry.delivery(aid, message["id"], "sent")
     forged = {**message, "content": [{"type": "text", "text": "different"}]}
@@ -158,7 +163,7 @@ def test_unknown_auxiliary_request_poison_seal(tmp_path):
 
 
 def test_pending_generation_blocks_version_change(tmp_path):
-    registry, ident, token, gateway = setup(tmp_path)
+    registry, _ident, token, _gateway = setup(tmp_path)
     aid, rid, _, _ = registry.begin(token)
     with pytest.raises(TimeoutError):
         registry.drain(.01)
@@ -181,7 +186,7 @@ def test_pool_mismatch_keeps_admission_closed(tmp_path):
 
 
 def test_http_sse_and_auth(tmp_path):
-    registry, ident, token, gateway = setup(tmp_path)
+    _registry, _ident, token, gateway = setup(tmp_path)
     try:
         server = make_server(gateway)
     except PermissionError:

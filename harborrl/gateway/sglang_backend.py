@@ -6,7 +6,9 @@ are deliberately insufficient. This adapter does not load models on import.
 """
 import json
 from urllib import request
+
 from harborrl.trajectories.native import digest, finite
+
 from .messages import ProtocolError, parse_qwen_output
 
 
@@ -84,7 +86,7 @@ class SGLangBackend:
             raise ValueError("missing or malformed generation logprobs")
         text = output.get("text")
         if not isinstance(text, str):
-            raise ValueError("missing generation text")
+            raise TypeError("missing generation text")
         output_ids = [row[1] for row in rows]
         reported_ids = output.get("output_ids")
         if reported_ids is not None and reported_ids != output_ids:

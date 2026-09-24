@@ -4,6 +4,7 @@ These records must enter a backend that honors token_weights and advantages.
 They must NOT be passed through the interactive reward/whitening builder.
 """
 import math
+
 from harborrl.trajectories.native import Identity, finite, require_ready
 
 

@@ -1,6 +1,7 @@
 """Native preflight: task metadata, not TerminalEnv materialization rules."""
 from pathlib import Path
-from .inspector import tree_digest, tomllib
+
+from .inspector import tomllib, tree_digest
 
 
 def inspect_native(path, *, expected_digest=None):
@@ -20,9 +21,9 @@ def inspect_native(path, *, expected_digest=None):
             raise ValueError("empty instruction")
         env, verifier = spec.get("environment", {}), spec.get("verifier", {})
         if not isinstance(env, dict) or not isinstance(verifier, dict):
-            raise ValueError("invalid environment/verifier configuration")
+            raise TypeError("invalid environment/verifier configuration")
         if not isinstance(spec.get("agent", {}), dict):
-            raise ValueError("invalid agent configuration")
+            raise TypeError("invalid agent configuration")
         if spec.get("user_agent") or spec.get("bridge"):
             reasons.append("simulated_user_or_bridge_not_enabled")
         if spec.get("steps"):

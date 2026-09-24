@@ -1,12 +1,12 @@
 """CPU contracts for schema-2 launch and Slime tensor boundaries."""
 from __future__ import annotations
 
-import json
 import asyncio
-from pathlib import Path
+import json
 import os
 import subprocess
 import sys
+from pathlib import Path
 from types import ModuleType, SimpleNamespace
 
 import pytest
@@ -173,8 +173,7 @@ def test_native_shell_dry_run_uses_official_v032_hooks(tmp_path):
 
 def test_native_runtime_binds_gateway_with_registry_and_backend(tmp_path, monkeypatch):
     from harborrl.gateway import server as gateway_server
-    from harborrl.gateway import sglang_backend
-    from harborrl.gateway import trace
+    from harborrl.gateway import sglang_backend, trace
     from harborrl.rollout import native_generate
 
     catalog = tmp_path / "catalog.json"
@@ -366,11 +365,13 @@ def test_native_dispatch_passes_materialized_prompt_data(tmp_path, monkeypatch):
     backend_output = tmp_path / "backend-env"
     plan["training_command"] = [
         "bash", "-c",
-        f"printf %s \"$ROLLOUT_PROMPT_DATA\" > {output}; "
-        f"printf %s \"$PATH\" > {path_output}; "
-        f"printf %s \"$HARBORRL_NATIVE_RUNNER_WORKERS\" > {workers_output}; "
-        f"printf %s \"$HARBORRL_NATIVE_GATEWAY_HOST\" > {gateway_output}; "
-        f"printf %s \"$SLIME_DIR:$MEGATRON_DIR:$SGLANG_IMAGE\" > {backend_output}",
+        (
+            f"printf %s \"$ROLLOUT_PROMPT_DATA\" > {output}; "
+            f"printf %s \"$PATH\" > {path_output}; "
+            f"printf %s \"$HARBORRL_NATIVE_RUNNER_WORKERS\" > {workers_output}; "
+            f"printf %s \"$HARBORRL_NATIVE_GATEWAY_HOST\" > {gateway_output}; "
+            f"printf %s \"$SLIME_DIR:$MEGATRON_DIR:$SGLANG_IMAGE\" > {backend_output}"
+        ),
     ]
     monkeypatch.setenv("SLIME_DIR", "/opt/slime-v0.3.2")
     monkeypatch.setenv("MEGATRON_DIR", "/opt/megatron")

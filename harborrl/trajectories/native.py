@@ -1,13 +1,13 @@
 """Strict, runtime-independent contracts for native trajectories (IR v2)."""
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
 import hashlib
 import json
 import math
 import os
-from pathlib import Path
 import tempfile
+from dataclasses import asdict, dataclass
+from pathlib import Path
 
 
 def finite(value):
