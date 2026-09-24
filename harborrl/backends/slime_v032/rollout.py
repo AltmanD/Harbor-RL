@@ -32,14 +32,18 @@ def assert_locked_policy_versions(ir_groups, policy_version):
                 raise ValueError("native rollout observed a stale policy version")
 
 
-async def run_native_groups(args, groups, policy_version):
+async def run_native_groups(args, groups, policy_version, rollout_id):
     """Run every group concurrently and return only complete IR evidence."""
-    from harborrl.rollout.native_generate import generate_group
+    from harborrl.rollout.native_generate import close_runtime, generate_group
 
     params = sampling_params(args)
-    results = await asyncio.gather(*(
-        generate_group(args, group, params) for group in groups
-    ))
+    try:
+        results = await asyncio.gather(*(
+            generate_group(args, group, params, rollout_id=rollout_id) for group in groups
+        ))
+    except BaseException:
+        close_runtime()
+        raise
     ir_groups = []
     for group in results:
         trajectories = []
@@ -80,7 +84,7 @@ def to_slime_samples(batch, ir_groups=None, *, sample_factory=None):
                     tokens=list(span.tokens),
                     response_length=span.response_length,
                     response="native Harbor trial",
-                    reward=unit.reward,
+                    reward={"score": unit.reward},
                     loss_mask=list(span.loss_mask[span.prompt_length:]),
                     rollout_log_probs=list(span.old_logprobs),
                     weight_versions=[span.policy_version],
@@ -139,14 +143,16 @@ def generate_rollout(
         raise ValueError("native rollout requires a positive rollout batch size")
     if type(expected_size) is not int or expected_size < 2:
         raise ValueError("native rollout requires a complete group size")
-    groups = [list(group) for group in data_source(batch_size)]
+    groups = [list(group) for group in data_source.get_samples(batch_size)]
     if len(groups) != batch_size:
         raise ValueError("native rollout batch is incomplete")
     if any(len(group) != expected_size for group in groups):
         raise ValueError("native rollout group is incomplete before launch")
+    if runner is None:
+        async def runner(args_, groups_, policy_version):
+            return await run_native_groups(args_, groups_, policy_version, rollout_id)
+    ir_groups = asyncio.run(runner(args, groups, None))
     policy_version = lock_policy_version(args)
-    runner = runner or run_native_groups
-    ir_groups = asyncio.run(runner(args, groups, policy_version))
     assert_locked_policy_versions(ir_groups, policy_version)
     batch = export_training_batch(
         ir_groups,

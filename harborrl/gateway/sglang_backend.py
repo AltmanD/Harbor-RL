@@ -32,14 +32,35 @@ class SGLangBackend:
     def count_tokens(self, converted):
         return len(self.prepare(converted))
 
-    def weight_version(self):
-        req = request.Request(self.endpoint + "/get_weight_version")
+    def weight_version(self, endpoint=None):
+        target = endpoint or self.endpoint
+        req = request.Request(target + "/get_weight_version")
         with self.opener.open(req, timeout=self.timeout) as response:
             payload = json.load(response)
         version = payload.get("weight_version")
         if not isinstance(version, str) or not version.strip():
             raise ValueError("missing serving weight version")
         return version
+
+    def pool_states(self):
+        req = request.Request(self.endpoint + "/workers")
+        with self.opener.open(req, timeout=self.timeout) as response:
+            payload = json.load(response)
+        workers = payload.get("workers") if isinstance(payload, dict) else None
+        if not isinstance(workers, list) or not workers:
+            raise ValueError("serving router returned no workers")
+        states = []
+        for worker in workers:
+            endpoint = worker.get("url") if isinstance(worker, dict) else None
+            if not isinstance(endpoint, str) or not endpoint.strip():
+                raise ValueError("serving router returned an invalid worker URL")
+            endpoint = endpoint.rstrip("/")
+            states.append({
+                "endpoint": endpoint,
+                "healthy": True,
+                "weight_version": self.weight_version(endpoint),
+            })
+        return states
 
     def generate(self, converted, identity, response_id):
         ids = self.prepare(converted)

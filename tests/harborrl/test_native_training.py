@@ -153,11 +153,22 @@ def test_native_shell_dry_run_uses_official_v032_hooks(tmp_path):
     assert "native_slime" not in command
     assert "--use-rollout-logprobs" in command
     assert "--megatron-to-hf-mode bridge" in command
+    assert "--no-save-optim" in command
     assert "--load /model" in command
     assert command.count(" --load ") == 1
-    assert "--num-steps-per-rollout 1" in command
+    assert "--num-steps-per-rollout 2" in command
     assert "--use-kl-loss" not in command
     assert "harborrl.rollout.entrypoint.generate" not in command
+
+    env["RESUME_LOAD"] = "/checkpoint"
+    with output.open("w") as stream:
+        result = subprocess.run(["bash", str(script)], stdout=stream, stderr=subprocess.STDOUT,
+                                env=env, check=False, timeout=30)
+    result.stdout = output.read_text()
+    assert result.returncode == 0, result.stdout
+    command = next(line for line in result.stdout.splitlines() if line.startswith("[dry-run] "))
+    assert "--load /checkpoint" in command
+    assert "--no-load-optim" in command
 
 
 def test_native_runtime_binds_gateway_with_registry_and_backend(tmp_path, monkeypatch):
@@ -249,15 +260,29 @@ def test_native_runtime_binds_gateway_with_registry_and_backend(tmp_path, monkey
         runtime.close()
         native_generate._RUNTIME = None
 
-def test_native_policy_identity_uses_synchronized_pool_version(tmp_path):
+def test_native_policy_identity_uses_synchronized_pool_version(tmp_path, monkeypatch):
     from harborrl.rollout import native_generate
 
-    runtime = SimpleNamespace(run_root=tmp_path)
-    (tmp_path / "policy-pool.json").write_text(json.dumps({"weight_version": "1"}))
-    assert native_generate.current_policy_version(runtime) == "1"
-    (tmp_path / "policy-pool.json").write_text(json.dumps({"weight_version": 1}))
-    with pytest.raises(ValueError, match="versioned policy pool"):
-        native_generate.current_policy_version(runtime)
+    class Backend:
+        endpoint = "http://router:30000"
+        def pool_states(self):
+            return [{"endpoint": self.endpoint, "healthy": True, "weight_version": "2"}]
+
+    class Registry:
+        def __init__(self):
+            self.published = None
+        def drain(self, timeout):
+            self.timeout = timeout
+        def publish_version(self, states, expected):
+            self.published = (states, expected)
+
+    monkeypatch.setenv("RUN_DIR", str(tmp_path))
+    registry = Registry()
+    runtime = SimpleNamespace(run_root=tmp_path, backend=Backend(), registry=registry)
+    assert native_generate.current_policy_version(runtime) == "2"
+    payload = json.loads((tmp_path / "policy-pool.json").read_text())
+    assert payload["weight_version"] == "2"
+    assert registry.published[1] == "2"
 
 
 def test_native_slots_spread_workers_and_shift_retries(tmp_path, monkeypatch):
@@ -305,11 +330,13 @@ def test_native_slots_spread_workers_and_shift_retries(tmp_path, monkeypatch):
     args = SimpleNamespace(n_samples_per_prompt=4, rollout_max_response_len=64)
     runtime_ = SimpleNamespace(rollout_root=tmp_path, semaphore=asyncio.Semaphore(8),
                                registry=SimpleNamespace(), profile={"model": "policy"})
-    sample = SimpleNamespace(metadata={"rollout_id": 0, "native_task": entry}, group_index=0)
+    sample = SimpleNamespace(metadata={"native_task": entry}, group_index=0)
 
     async def gather_slots():
         return await asyncio.gather(*[
-            native_generate._run_slot(args, runtime_, sample, slot, entry, "sampling", "1")
+            native_generate._run_slot(
+                args, runtime_, sample, slot, 0, entry, "sampling", "1"
+            )
             for slot in range(4)])
 
     results = asyncio.run(gather_slots())

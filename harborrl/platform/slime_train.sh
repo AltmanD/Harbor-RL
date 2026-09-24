@@ -65,13 +65,14 @@ CKPT_ARGS=(
   --megatron-to-hf-mode bridge
   --save "${CKPT_ROOT}/${RUN_ID:-run}"
   --save-interval "${SAVE_INTERVAL}"
+  --no-save-optim
   --max-ckpt-keep "${MAX_CKPT_KEEP:-2}"
   --checkpoint-min-free-gb "${CHECKPOINT_MIN_FREE_GB:-128}"
   --checkpoint-expected-gb "${CHECKPOINT_EXPECTED_GB:-0}"
   --checkpoint-space-margin-ratio "${CHECKPOINT_SPACE_MARGIN_RATIO:-1.15}"
 )
 if [[ -n "${RESUME_LOAD:-}" ]]; then
-  CKPT_ARGS+=(--load "${RESUME_LOAD}")
+  CKPT_ARGS+=(--load "${RESUME_LOAD}" --no-load-optim)
 else
   CKPT_ARGS+=(--load "${HF_CKPT}")
 fi
@@ -87,7 +88,7 @@ DATA_ARGS=(
   --rollout-max-response-len "${ROLLOUT_MAX_RESPONSE_LEN}"
   --rollout-max-context-len "${ROLLOUT_MAX_CONTEXT_LEN}"
   --rollout-temperature 1
-  --num-steps-per-rollout 1
+  --num-steps-per-rollout "${N_SAMPLES}"
   --balance-data
   --rollout-generation-max-retries 0
   --rollout-generation-retry-initial-backoff 60

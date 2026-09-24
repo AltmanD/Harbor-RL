@@ -101,12 +101,20 @@ def publish_native_version(states, expected):
 
 
 def current_policy_version(runtime_):
-    """Read the version just published by RolloutManager's synchronized pool check."""
-    payload = read_json(runtime_.run_root / "policy-pool.json")
-    version = payload.get("weight_version")
-    if not isinstance(version, str) or not version.strip():
-        raise ValueError("native rollout requires a versioned policy pool")
+    """Publish and lock the version currently served by the rollout pool."""
+    states = runtime_.backend.pool_states()
+    from harborrl.platform.policy_pool import publish_pool
+    version = publish_pool(states)
+    runtime_.registry.drain(float(os.environ.get("HARBORRL_NATIVE_DRAIN_TIMEOUT", "30")))
+    runtime_.registry.publish_version(states, version)
     return version
+
+
+def close_runtime():
+    global _RUNTIME
+    if _RUNTIME is not None:
+        _RUNTIME.close()
+        _RUNTIME = None
 
 
 def _task_entry(sample):
@@ -118,12 +126,19 @@ def _task_entry(sample):
     return entry
 
 
-def _identity(args, sample, slot, task_digest, reward_digest, sampling_digest, policy_version):
-    metadata = sample.metadata if isinstance(sample.metadata, dict) else {}
-    rollout_id = metadata.get("rollout_id")
+def _identity(
+    args,
+    sample,
+    slot,
+    rollout_id,
+    task_digest,
+    reward_digest,
+    sampling_digest,
+    policy_version,
+):
     group_index = getattr(sample, "group_index", None)
-    if type(rollout_id) is not int or type(group_index) is not int:
-        raise ValueError("Slime must provide rollout and group identity before native generation")
+    if type(group_index) is not int:
+        raise ValueError("Slime must provide group identity before native generation")
     return Identity(
         run_id=os.environ["RUN_ID"],
         batch_id=f"rollout-{rollout_id}",
@@ -139,11 +154,28 @@ def _identity(args, sample, slot, task_digest, reward_digest, sampling_digest, p
     )
 
 
-async def _run_slot(args, runtime_, sample, slot, entry, sampling_digest, policy_version):
+async def _run_slot(
+    args,
+    runtime_,
+    sample,
+    slot,
+    rollout_id,
+    entry,
+    sampling_digest,
+    policy_version,
+):
     reward_profile = RewardProfile(**entry["reward_profile"])
     identities = [
-        _identity(args, sample, index, entry["task_digest"], reward_profile.digest,
-                  sampling_digest, policy_version)
+        _identity(
+            args,
+            sample,
+            index,
+            rollout_id=rollout_id,
+            task_digest=entry["task_digest"],
+            reward_digest=reward_profile.digest,
+            sampling_digest=sampling_digest,
+            policy_version=policy_version,
+        )
         for index in range(args.n_samples_per_prompt)
     ]
     slots = GroupSlots(identities, max_attempts=int(os.environ["HARBORRL_NATIVE_MAX_ATTEMPTS"]))
@@ -174,7 +206,7 @@ async def _run_slot(args, runtime_, sample, slot, entry, sampling_digest, policy
     raise RuntimeError(f"native slot {slot} exhausted its retry budget")
 
 
-async def generate_group(args, group, sampling_params, evaluation=False):
+async def generate_group(args, group, sampling_params, rollout_id, evaluation=False):
     """Run one complete native group; evaluation is intentionally unsupported."""
     from harborrl.data.harbor.native_inspector import inspect_native
 
@@ -200,7 +232,9 @@ async def generate_group(args, group, sampling_params, evaluation=False):
     runtime_ = await runtime(args)
     policy_version = current_policy_version(runtime_)
     trajectories = await asyncio.gather(*[
-        _run_slot(args, runtime_, sample, slot, entry, sampling_digest, policy_version)
+        _run_slot(
+            args, runtime_, sample, slot, rollout_id, entry, sampling_digest, policy_version
+        )
         for slot, sample in enumerate(group)
     ])
     output = []

@@ -65,7 +65,7 @@ class FakeSample:
         self.tokens = list(span.tokens)
         self.response_length = span.response_length
         self.response = "native Harbor trial"
-        self.reward = unit.reward
+        self.reward = {"score": unit.reward}
         self.loss_mask = list(span.loss_mask[span.prompt_length:])
         self.rollout_log_probs = list(span.old_logprobs)
         self.weight_versions = [span.policy_version]
@@ -242,6 +242,30 @@ def test_postprocess_rejects_drift():
         rollout_data_postprocess(args, 0, over_budget)
 
 
+def test_postprocess_accepts_tensor_like_scalars():
+    class Scalar:
+        def __float__(self):
+            return -0.2
+
+    class IntegerScalar:
+        def __float__(self):
+            return 1.0
+
+    args = SimpleNamespace(n_samples_per_prompt=2)
+    rollout_data_postprocess(args, 0, {
+        "tokens": [[1, 2, 3]],
+        "response_lengths": [IntegerScalar()],
+        "rewards": [Scalar()],
+        "raw_reward": [Scalar()],
+        "truncated": [IntegerScalar()],
+        "sample_indices": [0],
+        "rollout_ids": [0],
+        "loss_masks": [[1]],
+        "rollout_log_probs": [[Scalar()]],
+        "rollout_mask_sums": [IntegerScalar()],
+    })
+
+
 def test_versions_and_doctor_contract():
     expected = v032_versions.expected_versions()
     assert expected["slime_commit"] == "3778dbf6d1a533ab478ecf5ddaa11449a47752b2"
@@ -304,13 +328,20 @@ def test_rollout_hook_locks_policy_version_and_keeps_groups_atomic(tmp_path, mon
         events.append(("generate", policy_version))
         return json.loads(json.dumps(locked))
 
+    class SlimeDataSource:
+        def get_samples(self, count):
+            return [
+                [SimpleNamespace(metadata={}) for _ in range(2)]
+                for _ in range(count)
+            ]
+
     output = generate_rollout(
-        args, 3, lambda count: [[SimpleNamespace(metadata={}) for _ in range(2)] for _ in range(count)],
+        args, 3, SlimeDataSource(),
         runner=runner,
         output_factory=SimpleNamespace,
         sample_factory=lambda **fields: SimpleNamespace(**fields),
     )
-    assert events == [("generate", "7")]
+    assert events == [("generate", None)]
     assert output.metrics["native_group_count"] == 2.0
     assert output.metrics["native_trajectory_count"] == 4.0
     assert output.metrics["native_turn_count"] == 7.0
@@ -318,6 +349,13 @@ def test_rollout_hook_locks_policy_version_and_keeps_groups_atomic(tmp_path, mon
     assert [len(group) for group in output.samples] == [4, 3]
     rollout_ids = {sample.rollout_id for group in output.samples for sample in group}
     assert rollout_ids == {6, 7}
+    assert all(
+        sample.reward == {
+            "score": sample.metadata["native_ir"]["evaluation"]["training_reward"]
+        }
+        for group in output.samples
+        for sample in group
+    )
     assert all(sample.metadata["native_ir"]["identity"]["policy_version"] == "7" for group in output.samples for sample in group)
 
     async def stale_runner(args_, groups_, policy_version):
@@ -325,14 +363,14 @@ def test_rollout_hook_locks_policy_version_and_keeps_groups_atomic(tmp_path, mon
 
     with pytest.raises(ValueError, match="stale policy version"):
         generate_rollout(
-            args, 3, lambda count: [[SimpleNamespace(metadata={}) for _ in range(2)] for _ in range(count)],
+            args, 3, SlimeDataSource(),
             runner=stale_runner, output_factory=SimpleNamespace,
             sample_factory=lambda **fields: SimpleNamespace(**fields),
         )
     (run_dir / "policy-pool.json").unlink()
     with pytest.raises(ValueError, match="locked policy pool"):
         generate_rollout(
-            args, 3, lambda count: [[SimpleNamespace(metadata={}) for _ in range(2)] for _ in range(count)],
+            args, 3, SlimeDataSource(),
             runner=runner, output_factory=SimpleNamespace,
             sample_factory=lambda **fields: SimpleNamespace(**fields),
         )
