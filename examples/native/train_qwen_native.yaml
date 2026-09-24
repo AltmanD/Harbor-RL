@@ -1,0 +1,55 @@
+schema_version: 2
+
+execution:
+  backend: harbor_job
+
+tasks:
+  catalog: catalog.json
+
+harness:
+  name: claude_code
+  profile: claude-code-profile.json
+
+harbor:
+  python: /opt/harbor/bin/python
+  version: "0.23.0"
+  workers:
+    - worker-1
+    - worker-2
+
+gateway:
+  advertised_url: http://gateway-worker:49183
+  audited_raw_logprobs: true
+  host: "0.0.0.0"
+  port: 49183
+  template_digest: "1111111111111111111111111111111111111111111111111111111111111111"
+  tokenizer_digest: "0000000000000000000000000000000000000000000000000000000000000000"
+
+model:
+  args_file: qwen3-8B
+  checkpoint: /models/qwen3-8b
+  reference: /models/qwen3-8b-reference
+
+training:
+  backend_contract: slime-v0.3.2-native-v1
+  learning_rate: 0.000001
+  num_rollout: 1
+  save_interval: 1
+
+sampling:
+  group_size: 2
+  groups_per_batch: 1
+  max_attempts: 2
+  max_context: 8192
+  max_tokens: 1024
+
+deployment:
+  actor_gpus: 4
+  actor_tensor_parallel_size: 4
+  layout: split
+  num_gpus: 8
+  rollout_gpus: 4
+  rollout_gpus_per_engine: 4
+
+output:
+  root: runs

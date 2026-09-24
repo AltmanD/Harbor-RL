@@ -1,349 +1,220 @@
-# LightRL
+# HarborRL
 
-<div align="center">
+HarborRL 是面向适配 Harbor 格式任务的强化学习框架。它把模型 serving、隔离任务执行、verifier 回执、轨迹记录和 GRPO 训练连接起来，通过 Slime/Megatron actor 更新模型参数。
 
-<img src="assets/lightrl_logo_cropped.png" alt="LightRL Logo" width="80"/>
+[English](README.md)
 
-**面向智能体环境的轻量、高效、可扩展强化学习后训练框架**
+## 摘要
 
-[![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)](pyproject.toml)
-[![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
-[![PyTorch](https://img.shields.io/badge/PyTorch-2.4%2B-ee4c2c.svg)](https://pytorch.org/)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+HarborRL 面向的是这样的训练场景：
 
-[English](README.md) | 简体中文
+- 模型调用、任务执行、verifier 结果、reward 和 policy version 被记录为同一段 rollout 历史，而不是事后从分散日志重建。
+- Harbor 任务在外部 worker 的环境中运行，trainer 只负责调度、数据校验和训练。
+- native 轨迹先经过校验并导出为后端中性数据，然后才交给 Slime/Megatron。
 
-</div>
+HarborRL 不是 benchmark 、模型、Docker 编排系统或通用 RL 库，也不替代 Slime、Megatron-LM 或 SGLang。
 
-## 项目概述
+框架按 dataset、harness、model、train framework/algorithm 四个维度组织可插拔能力。这些选择在训练 YAML 中分开声明，实验时可以替换其中一个维度，同时保持 rollout 轨迹格式和训练数据导出口径不变。当前提供的默认组合是 Harbor task catalog、Claude Code harness、Qwen3-8B 与 SGLang serving 语义，以及 Slime/Megatron GRPO；这组组合已经通过 CPU 测试和固定版本 GPU 闭环验证。
 
-LightRL 是面向交互式环境中语言模型智能体的强化学习后训练框架。每个
-实验都显式组合以下四个维度，便于审阅、复现与扩展：
+## Framework
 
-| 维度 | 当前选项 | 代码入口 |
+HarborRL 把产生数据的 rollout 和 actor 更新分开。native 侧生成并校验任务轨迹；adapter 侧只把被接受的训练字段交给 Slime 官方 hooks；Megatron 仍然是 actor 训练器。
+
+```text
+Training configuration
+    -> native group rollout and Harbor execution
+    -> Native IR and backend-neutral export
+    -> Slime v0.3.2 official hooks
+    -> Megatron actor update and checkpoint
+```
+
+| 区域 | 内容 |
+| --- | --- |
+| Native pipeline | 配置、Messages gateway、rollout 调度、Harbor-job runner、轨迹校验和导出 |
+| Training integration | Slime v0.3.2 hook adapter、版本检查、launcher 规划和 policy/checkpoint 协调 |
+| Examples | 离线 CPU fixture 和通用 Qwen GPU 启动模板 |
+| Tooling | 后端 bootstrap、SGLang 语义 probe 和发布审计 |
+| Tests | 覆盖配置、gateway、生命周期、导出和 adapter 行为的 CPU 套件 |
+
+可插拔维度可以概括为：
+
+| 维度 | 当前选择 | 主要配置 |
 | --- | --- | --- |
-| Harness | 训练：Camel-Agent、Claude Code CLI；评测：另支持 Terminus-2 | `agentic_rl/harnesses/`、`agentic_rl/harnesses/eval/` |
-| Environment | SETA、Agent-SafetyBench、AgentHarm、Tau2；SWE-smith / SWE-Verified 数据转换工具 | `agentic_rl/environments/`、`agentic_rl/data/` |
-| Model | 由 recipe 指定（稳定 recipe 当前覆盖 Qwen3-8B、GLM-5.1） | `configs/rollout/` |
-| Algorithm | GRPO / DAPO、DIVE-PO | Slime 后端与 `agentic_rl/algorithms/` |
+| Dataset | Harbor 格式 task catalog | `tasks` |
+| Harness | Claude Code profile | `harness` |
+| Model | 配置化的 actor/reference checkpoint 和 serving 语义 | `model` 和 `gateway` |
+| Train framework / algorithm | Slime/Megatron GRPO hooks | `training` |
 
-LightRL 内置 Slime 与 Megatron-LM 训练后端。终端环境由 Docker worker
-隔离执行，训练进程通过 HTTP 调用。worker 既可部署在独立的 CPU/Docker
-主机，也可与 GPU 训练进程部署在同一主机；同机部署时应预留足够的 CPU、
-内存、Docker 网络和端口资源。
+## 安装
 
-## 目录
+使用 Python 3.10 或更新版本。CPU 开发不需要 CUDA、Docker、模型权重、Slime、Megatron-LM 或 SGLang。
 
-- [核心能力](#核心能力)
-- [运行模型](#运行模型)
-- [系统架构](#系统架构)
-- [安装与前提](#安装与前提)
-- [快速开始](#快速开始)
-- [配置与输出](#配置与输出)
-- [验证状态](#验证状态)
-- [开发与扩展](#开发与扩展)
-- [文档](#文档)
-- [致谢](#致谢)
-- [引用](#引用)
-- [许可证](#许可证)
+创建虚拟环境：
 
-## 核心能力
+```bash
+python -m venv .venv
+. .venv/bin/activate
+```
 
-- **配方驱动训练**——每个实验对应一个可审阅的 shell 脚本；启动前可用
-  `--dry-run` 查看数据、模型、并行配置与完整后端命令。
-- **多类智能体环境**——通过 `EnvSpec` 注册表支持 SETA、Agent-SafetyBench、
-  AgentHarm 和 Tau2；SWE-smith / SWE-Verified 提供数据转换与终端 worker
-  工具。终端任务通过 Docker worker 隔离执行。
-- **明确的算法边界**——GRPO / DAPO 由内置 Slime 后端提供；LightRL 在
-  `agentic_rl/algorithms/` 中维护 DIVE-PO 探索扩展和 PRM 奖励 agent。
-- **低成本扩展**——环境、harness 与奖励后处理均有集中注册入口，新增能力
-  无需在训练链路中散落修改条件分支。
-- **完整可观测性**——逐轮对话轨迹、JSONL 指标、W&B 曲线、配置快照与数据
-  清单统一写入分类目录 `runs/training/<RUN_ID>/`（评测和测试分别使用
-  `runs/evaluation/`、`runs/testing/`）。
-- **有界端到端验证**——4 GPU 小样本检查覆盖 rollout、奖励成形与 actor
-  更新，无需完整训练即可验证部署链路。
+预期结果：创建 `.venv/`，shell 提示符出现 `(.venv)`。两个命令都不会启动服务，也不会修改示例文件。
 
-## 运行模型
+安装可编辑包和开发工具：
+
+```bash
+python -m pip install --upgrade pip
+python -m pip install -e .[dev]
+```
+
+预期结果：pip 安装 HarborRL、`pytest` 和 `ruff`，但不会安装重型训练栈，也不会编译 CUDA kernel。
+
+检查命令行入口：
+
+```bash
+harborrl --help
+```
+
+预期结果：argparse 输出训练 CLI 用法并以状态码 0 退出。公开命令是 `train` 和 `doctor`，两者都要求 `--config`。
+
+## CPU 启动
+
+### 查看示例启动计划
+
+```bash
+python -m harborrl.cli train --config examples/native/train_qwen_native.yaml --dry-run
+```
+
+预期结果：命令输出一个包含 `config`、`command`、`environment` 和 `training_command` 的 JSON 对象。`config` 中的路径会被解析成绝对路径，GPU 和采样预算会被规范化，`training_command` 显示外部 native-train dispatcher。命令以状态码 0 退出，不会创建 run 目录，不会启动 Ray 或 Docker，不会加载模型，也不会连接 worker。
+
+示例刻意使用 `worker-1`、`/models/qwen3-8b` 和占位 serving 摘要等通用值。在 dry-run 输出中看到这些值是预期行为，正式训练必须替换它们。
+
+### 运行离线示例
+
+```bash
+bash examples/native/cpu_contract_smoke.sh
+```
+
+预期结果：脚本输出 JSON，其中 `"status": "passed"`，`task_digest` 是 64 位十六进制字符串，`reward_contrast` 为 `[0.0, 1.0]`，两个 `advantages` 数值相反且非零，两个 group 成员的 rollout ID 相同。脚本以状态码 0 退出。
+
+该示例会锁定内置 hello-world 任务，构造两种结果的 reward 回执，组装一个完整 Native IR group，导出后端中性 batch，并校验 Slime adapter postprocess。不使用 Docker、live model、Harbor worker 或 GPU；仅证明 CPU 侧行为正确，而非训练链路可用。
+
+## GPU 启动
+
+### 检查节点并准备固定版本后端
+
+确认节点暴露的 GPU 数量不少于配置数量：
+
+```bash
+nvidia-smi
+```
+
+预期结果：`nvidia-smi` 列出预期 GPU 和显存状态。示例 YAML 默认使用 8 卡，其中 4 卡给 actor，4 卡给 rollout。
+
+在有 Git、Docker 和网络访问的节点上安装固定版本开源栈：
+
+```bash
+scripts/bootstrap_backends.sh /path/to/backends
+. /path/to/backends/harborrl-backend.env
+```
+
+预期结果：脚本检出 Slime commit `3778dbf6d1a533ab478ecf5ddaa11449a47752b2`、Megatron-LM commit `1dcf0dafa884ad52ffb243625717a3471643e087`，拉取 `lmsysorg/sglang:v0.5.15.post1-cu129`，并写出 `harborrl-backend.env`。source 该文件后，当前 shell 会设置 `SLIME_DIR`、`MEGATRON_DIR` 和 `SGLANG_IMAGE`。
+
+
+### 准备私有机器配置
+
+把 `examples/native/train_qwen_native.yaml` 复制到私有路径。替换通用 worker、actor/reference checkpoint 路径、gateway origin、tokenizer/template 摘要、GPU 布局和输出位置；同时让 `tasks.catalog` 和 `harness.profile` 指向目标 catalog 和 profile，因为相对路径按私有 YAML 所在目录解析。
+
+预期结果：私有 YAML 只包含对你的机器有效的值。
+
+在准备 worker 前先验证规范化后的私有计划：
+
+```bash
+python -m harborrl.cli train --config /path/to/private.yaml --dry-run
+```
+
+预期结果：JSON 中出现你的私有值和解析后的路径，`training.backend_contract` 仍为 `slime-v0.3.2-native-v1`，该命令不会创建 run 目录或启动后端。
+
+### 准备 Harbor worker
+
+每个 worker 需要 Linux、Docker Engine、来自 trainer 的免密 SSH、Python 3.12 或更新版本，以及 Harbor `0.23.0`。worker 必须能拉取或本地构建 catalog 中的所有任务镜像，并能访问 advertised Messages gateway；它不需要模型 provider 的 API key。
+
+在每个 worker 安装匹配的 HarborRL runner 和 Harbor runtime。直接探测的示例：
+
+```bash
+ssh WORKER 'cd /path/to/Harbor-RL && /opt/harbor/bin/python -m harborrl.rollout.harbor_job.runner --probe'
+```
+
+预期结果：worker 输出 JSON，其中 `harbor_version` 为 `0.23.0`，Python 版本不低于 3.12，Claude option 字段可用，Harbor trial 接口可调用。命令以状态码 0 退出，且不会创建 trial。
+
+### 运行 doctor
+
+```bash
+harborrl doctor --config /path/to/private.yaml
+```
+
+预期结果：doctor 输出包含 `checks` 和 `scope` 的 JSON 对象。所有检查项都是 `"ok": true`，进程以状态码 0 退出，并且不会启动训练。
+
+doctor 会检查私有 YAML、catalog 摘要、模型文件、worker SSH 探测、固定后端路径和 commit、必需 import、hooks、GPU 预算以及 SGLang image tag。doctor 不会启动模型服务，也不会生成 token，因此 serving 协议行为、token ID 和 logprob 会在后续 live 语义检查或真实训练中验证，而不是由 doctor 验证。
+
+### 启动训练
+
+```bash
+harborrl train --config /path/to/private.yaml
+```
+
+预期结果：命令先再次运行 doctor，然后 HarborRL 在 `output.root/training/` 下创建以时间戳和 run ID 命名的新目录。run 中会记录 launch plan、source manifest、物化后的 task catalog、prompt rows、轨迹、policy 历史、metrics，以及按保存间隔生成的 checkpoint。成功运行的进程状态码为 0。
+
+如果任意 preflight 检查失败，训练不会启动，失败检查会以 JSON 输出到 stderr。如果外部后端异常退出，子进程状态码会被透传，run 目录会保留失败时已有的证据供检查。
+
+## 运行配置与任务格式
+
+训练通过一个 YAML 文件配置，section 和字段集合是固定的。相对路径按 YAML 文件所在目录解析。可重复使用 `--set section.field=value`，值会按 YAML 解析并再次校验。
+
+| Section | 用途 |
+| --- | --- |
+| `execution` | 固定选择 `harbor_job` backend |
+| `tasks` | 选择非空 immutable task catalog |
+| `harness` | 选择 Claude CLI、模型和 timeout profile |
+| `harbor` | 配置 Harbor 版本、解释器和 SSH worker |
+| `gateway` | 配置 Messages listener、origin、serving 摘要和 raw-logprob 审计 |
+| `model` | 配置 actor/reference checkpoint 和 Slime model preset |
+| `training` | 配置 rollout 数、学习率、保存节奏和 backend 标识 |
+| `sampling` | 配置 group 大小、batch group 数、重试、上下文和生成限制 |
+| `deployment` | 配置 GPU 数量和 actor/rollout 并行度 |
+| `output` | 配置 run tree 根目录 |
+
+一个 native task 是内容寻址目录：
 
 ```text
-训练配方
-  → Slime 启动器：数据准备、worker 发现、命令组装
-  → Rollout 钩子：harness + 推理 + 环境交互
-  → 奖励成形：分数构造与可选 DIVE-PO 后处理
-  → Actor 更新：通过 Slime / Megatron-LM 训练
+task/
+├── task.toml
+├── instruction.md
+├── environment/
+│   └── Dockerfile
+└── tests/
+    └── test.sh
 ```
 
-终端任务需要一个可用 Docker 的 worker，并通过 `WORKER_URLS` 暴露服务。
-worker 可以运行在独立 CPU/Docker 主机上，也可以运行在当前 GPU 训练主机
-上；后者适合资源充足的单机部署，但需要避免 Docker 容器与训练进程争用
-CPU、内存、磁盘和端口。单个 worker 默认由训练进程直连；配置多个 worker
-或显式设置 `START_ENV_POOL_SERVER=1` 时，可启动本地 router 做租约路由。
+catalog 身份格式为：
 
-## 系统架构
-
-```text
-examples/training/<recipe>.sh
-  → agentic_rl/platform/slime_train.sh          # 稳定公开入口
-      ├─ slime_train/lib_*.sh                    # 7 阶段：目录、配置、数据、worker、参数、启动
-      └─ slime/train_async.py                    # GRPO / DAPO 训练后端
-          → agentic_rl/rollout/entrypoint.generate
-              ├─ environments/registry.py       # 数据源、运行模式与奖励策略注册
-              ├─ harnesses/factory.py           # Camel-Agent / Claude Code 工厂
-              ├─ rollout/backends/sglang.py     # 共享的 sglang 轮次客户端
-              ├─ rollout/generate_steps.py      # 多轮交互、评分与探索奖励
-              └─ rollout/sample_builder.py      # 奖励成形 → Sample.reward["score"]
-          → algorithms/dive_po/rewards/dual_stream
-                                                   # 可选组归一化奖励后处理
-```
-
-启动器内部依次加载 `lib_bootstrap`、`lib_run_dir`、`lib_rollout_cfg`、
-`lib_dataset`、`lib_worker`、`lib_args` 与 `lib_launch`。训练配方只依赖稳定的
-`slime_train.sh` 入口，第三方后端细节与项目新增逻辑保持分层。
-
-### 仓库结构
-
-```text
-LightRL/
-├── agentic_rl/
-│   ├── algorithms/
-│   │   ├── dive_po/         # DIVE-PO exploration、rewards 与默认参数
-│   │   └── prm/             # PRM（process reward）奖励 agent
-│   ├── data/                # 数据转换、下载与训练数据准备
-│   ├── environments/        # EnvSpec 注册表、协议、runtime、奖励规则与 HTTP client
-│   ├── harnesses/           # Camel-Agent / Claude Code harness 与统一工厂
-│   ├── misc/                # rollout 日志与 JSONL sink
-│   ├── platform/            # Slime 启动器、worker/router、路径与环境变量解析
-│   └── rollout/             # 入口钩子、交互循环、推理后端、准入与轨迹存储
-├── configs/rollout/         # rollout 模型模板（唯一保留的组合配置层）
-├── examples/
-│   ├── training/            # 正式训练 recipe 与 world_model/WIP 入口
-│   └── validation/          # 不含站点拓扑的通用验证辅助文件
-├── benchmarks/              # benchmark 数据与任务定义
-├── deploy/workers/          # Docker/SETA worker 运行时与 watchdog
-├── deploy/runtime/          # worker 代理、镜像预热与依赖资源
-├── deploy/ops/              # worker 诊断、修复与清理
-├── deploy/archive/          # 仅供历史兼容的旧入口（不用于新部署）
-├── tools/                   # 分析、评测和开发诊断工具
-│   └── evaluation/          # 通用评测编排与按 benchmark 归类的入口
-├── tests/                   # pytest 单元与集成测试
-├── slime/                   # 内置第三方 rollout/训练后端
-├── Megatron-LM/             # 内置第三方模型训练后端
-├── runs/                    # Git 忽略的运行配置、日志、指标与轨迹
-└── docs/                    # 架构、算法、配置、评测与运维文档
-```
-
-## 安装与前提
-
-- Python ≥ 3.10。
-- 真实训练需要已准备 CUDA、Slime、Megatron-LM 和模型 checkpoint 的运行环境。
-- SETA 等终端任务需要可用 Docker 的 worker；worker 可位于独立 CPU 主机，
-  也可位于当前 GPU 训练主机。
-- 训练进程必须能访问 worker 服务端口（默认 `18081`）；同机部署可使用
-  `127.0.0.1`，跨主机部署应使用训练节点可达的地址。
-- 站点地址、凭据和调度参数应放入环境变量或站点侧的 Git 忽略配置文件，
-  不要提交到仓库。
-
-源码安装 Python 包：
-
-```bash
-python3 -m pip install -e '.[rollout,worker,train]'
-python3 -c 'import agentic_rl'
-```
-
-该命令只安装 Python 包及所选可选依赖，不会准备 CUDA、模型权重或集群运行
-环境。真实训练仍需按 Slime 与 Megatron-LM 的要求准备后端依赖。
-
-## 快速开始
-
-### 1. 启动并配置 worker
-
-先在选定的 Docker 主机上启动 worker。该主机可以是独立 CPU 节点，也可以是
-当前 GPU 训练节点；完整启动参数、容量配置和运维脚本见
-[Docker worker 文档](deploy/workers/README.md)。worker 运维命令见
-[deploy/ops](deploy/ops/README.md)，运行时资源见
-[deploy/runtime](deploy/runtime/README.md)。已完成机器准备时，可从仓库根目录
-启动默认 pool server：
-
-```bash
-bash deploy/workers/run_pool_server.sh
-```
-
-然后在训练进程所在 shell 中配置服务地址并检查健康状态：
-
-```bash
-export WORKER_URLS=http://<WORKER_HOST>:18081
-curl --noproxy '*' --fail http://<WORKER_HOST>:18081/healthz
-```
-
-同机部署时 `<WORKER_HOST>` 可设为 `127.0.0.1`；跨主机部署时填写 worker
-的可达 IP 或主机名。多个 worker 使用逗号分隔的 `WORKER_URLS`，也可通过
-`WORKER_URLS_FILE` 提供地址列表。
-
-若要执行已维护的 Qwen3-8B + SETA fixed12 + Camel-Agent 4 GPU 评测，使用
-[一键评测配方](examples/evaluation/run_qwen3_8b_seta_fixed12_camel_4gpu.sh)：
-
-```bash
-# 先检查解析后的配置、worker 地址和最终命令（不启动服务）
-bash examples/evaluation/run_qwen3_8b_seta_fixed12_camel_4gpu.sh --dry-run
-
-# 确认清理本机 Ray/SGLang 进程后启动评测
-CONFIRM_LOCAL_CLEANUP=1 \
-  bash examples/evaluation/run_qwen3_8b_seta_fixed12_camel_4gpu.sh
-```
-
-该配方要求 4 张 GPU、可达的 `WORKER_URLS`、Qwen3-8B checkpoint 以及已安装
-的项目运行时依赖（至少包括 PyYAML、Ray、CUDA/sglang）。SETA worker 的
-`/healthz` 检查通过后才会启动 `slime/eval_only.py`。站点专用的 RJob/DinD
-提交脚本不应复制到公共 recipe。
-
-### 2. 检查训练配方
-
-当前维护的主要入口如下；`examples/training/world_model/` 仍处于 WIP，不属于
-稳定训练配方。
-
-| Recipe | Harness | Model | Environment | Algorithm |
-| --- | --- | --- | --- | --- |
-| `train_qwen3_8b_seta_dapo.sh` | Camel-Agent | Qwen3-8B | SETA | DAPO |
-| `train_qwen3_8b_seta_dive_po.sh` | Camel-Agent | Qwen3-8B | SETA | DIVE-PO |
-| `train_qwen3_8b_mixed_dapo.sh` | Camel-Agent | Qwen3-8B | SETA + Agent-SafetyBench + AgentHarm | DAPO |
-| `train_glm_5_1_seta_dapo.sh` | Camel-Agent | GLM-5.1 | SETA | DAPO |
-
-先在 GPU 训练环境中执行 `--dry-run`，检查解析后的数据、模型、并行参数与
-后端命令：
-
-```bash
-bash examples/training/train_qwen3_8b_seta_dapo.sh --dry-run
-bash examples/training/train_qwen3_8b_seta_dive_po.sh --dry-run
-bash examples/training/train_qwen3_8b_mixed_dapo.sh --dry-run
-bash examples/training/train_glm_5_1_seta_dapo.sh --dry-run
-```
-
-### 3. 启动训练
-
-```bash
-WORKER_URLS=http://<WORKER_HOST>:18081 \
-NUM_GPUS=4 ACTOR_GPUS=2 ROLLOUT_GPUS=2 TP_SIZE=2 \
-ROLLOUT_NUM_GPUS_PER_ENGINE=2 \
-bash examples/training/train_qwen3_8b_seta_dapo.sh
-```
-
-可用 `RUN_ID` 覆盖运行名；设置 `BACKGROUND=1` 时，启动器日志写入
-`runs/training/<RUN_ID>/launcher.log`。GLM-5.1 配方还需要可用的 `HF_CKPT`、
-`REF_LOAD` 与兼容的 `MODEL_ARGS_FILE`。更多入口与参数见
-[训练示例](examples/README.md)。
-
-### 4. 执行源码级检查
-
-```bash
-python3 -m compileall -q agentic_rl
-python3 -m pytest tests/agentic_rl -q
-WORKER_URLS=http://127.0.0.1:18081 \
-  bash examples/training/train_qwen3_8b_seta_dapo.sh --dry-run
-```
-
-通用的开发 smoke 与静态检查位于 `tools/dev/`；包含站点拓扑、凭据或调度
-参数的 RJob 提交脚本不纳入公共 recipe，以避免把集群细节带入代码库。
-
-## 配置与输出
-
-### 训练配置
-
-训练默认配置直接写在 recipe 脚本中。Python 侧环境变量解析集中于
-`agentic_rl/env.py`，其中的 `ENV_VARS` 表记录 rollout 相关变量。
-环境与数据源能力集中在 `agentic_rl/environments/registry.py` 的 `EnvSpec`
-表中，模型侧 rollout 模板集中在 `configs/rollout/`。环境变量可覆盖 recipe
-默认值；完整字段、优先级和示例见[配置说明](docs/configuration.md)。
-
-站点专用地址、凭据、代理和调度容量不得写入公共 recipe，应通过环境变量或
-站点侧的 Git 忽略配置提供。
-
-### 输出目录
-
-每次运行写入对应分类目录（训练 `training`、评测 `evaluation`、测试
-`testing`；debug 在 `testing/debug`）：
-
-```text
-runs/<category>/<RUN_ID>/
-├── config/                # 解析后的配置快照与数据集清单
-├── logs/                  # train.log、metrics.jsonl 与启动日志
-├── trajectories/          # 单样本 traj.json 与旁路索引 index.jsonl
-├── metrics/               # W&B 与离线分析产物
-├── environment_outputs/   # worker/AgentRunner 环境侧产物
-└── meta.json              # run 路径、版本与命令元数据
-```
-
-`runs/latest` 指向最近一次运行。训练产物应进入 `runs/`，不应在仓库根目录
-散落临时文件。checkpoint 与 W&B 的存储约定见
-[Checkpoint 与 W&B 存储](docs/operations/checkpoint-wandb.md)。
-
-## 验证状态
-
-已记录的有界验证（2026-08-07，4 GPU，P0–P2 重构后）结果如下：
-
-- SETA + DAPO：3 个 rollout、6 个 actor train step，更新值有限且非零，
-  验证标记为 `TRAINING_METRICS_OK`。
-- SETA + DIVE-PO：3 个 rollout、7 个 actor step、4 个非零更新，并完整导出
-  轨迹产物，验证标记为 `EXAMPLE_VALIDATION_OK`。
-- Mixed（SETA + Agent-SafetyBench + AgentHarm）+ DAPO：8 条指标记录、4 个
-  actor train step、4 个非零更新，验证标记为 `EXAMPLE_VALIDATION_OK`。
-
-以上是短程正确性检查，不代表模型收敛或正式 benchmark 成绩。
-
-## 开发与扩展
-
-常用源码级检查：
-
-```bash
-python3 -m pytest tests/ -q
-python3 -m compileall -q agentic_rl
-```
-
-- **新增环境**——在 `agentic_rl/environments/registry.py` 注册一条
-  `EnvSpec`，并实现 `environments/protocol.py:EnvClient` 协议；本地/远程
-  运行、评分模式、安全奖励模式与轨迹别名均由注册表集中决定。
-- **新增 harness**——在 `agentic_rl/harnesses/factory.py` 的
-  `_HARNESS_ALIASES` / `_HARNESS_TARGETS` 中注册，并实现
-  `rollout/runner.py:RolloutAgent` 协议；可选依赖通过惰性 import 隔离。
-- **新增奖励后处理**——暴露 `post_process_rewards(args, samples)`，并将
-  `CUSTOM_REWARD_POST_PROCESS_PATH` 指向其 import 路径。
-- **新增训练配方**——优先复用 `examples/training/` 中的稳定启动入口与
-  `configs/rollout/` 模型模板，站点路径和凭据继续留在本地配置中。
-
-## 文档
-
-- [架构说明](docs/architecture.md)——包边界、训练链路、router 与注册表设计
-- [配置说明](docs/configuration.md)——recipe、环境变量与覆盖优先级
-- [部署总览](deploy/README.md)——worker、运行时资源与运维工具的职责边界
-- [DIVE-PO](docs/algorithms/dive_po_dual_stream.md)——双流优势与奖励后处理
-- [Harness 选择](docs/harnesses/README.md)——Camel-Agent / Claude Code 接入
-- [评测工具](docs/evaluation/README.md)——通用评测编排、SETA fixed12 与格式导出
-- [Docker worker](deploy/workers/README.md)——启动、容量、预热、清理与恢复
-- [运维工具](deploy/ops/README.md)——诊断、修复、清理与 worker 准备
-- [运行时资源](deploy/runtime/README.md)——代理、镜像预热、依赖与 systemd 资源
-- [Checkpoint 与 W&B 存储](docs/operations/checkpoint-wandb.md)
-- [训练示例](examples/README.md)——稳定配方、参数与验证入口
-
-## 致谢
-
-LightRL 内置 [Slime](https://github.com/THUDM/slime) 作为 rollout/训练运行时，
-并使用 [Megatron-LM](https://github.com/NVIDIA/Megatron-LM) 进行模型训练。
-智能体 RL 技术栈最初在 **OpenClaw-RL** 中研发，后抽取并重构为本框架。
-
-## 引用
-
-如果 LightRL 对您的工作有帮助，请引用：
-
-```bibtex
-@misc{lightrl,
-  title={LightRL: A Lightweight, Efficient, Scalable RL Post-training Framework for Agentic Environments},
-  author={Pu, Yuan and Zhang, Shaoang and Zhang, Chenhao and Li, Xueyan and Lu, Yudong and Tang, Jia and Wang, Guanchu and Niu, Yazhe},
-  publisher={GitHub},
-  howpublished={\url{https://github.com/opendilab/LightRL}},
-  year={2026},
+```json
+{
+  "id": "task",
+  "revision": "source-revision",
+  "path": "relative/or/absolute-task",
+  "task_digest": "64-hex-sha256",
+  "reward_profile": {
+    "key": "reward",
+    "scale": 1.0,
+    "offset": 0.0,
+    "raw_range": [0, 1]
+  }
 }
 ```
 
-## 许可证
+verifier 会写出共享环境 terminal result 以及 `reward.json` 或 `reward.txt`。HarborRL 通过 reward profile 分别解析两者，要求选定值一致，并记录源字节和 SHA-256 回执。布尔值和非有限 reward 会被拒绝。
 
-[MIT](LICENSE)
+机器可读 Hub inventory 位于 [configs/harbor_hub/manifests.yaml](configs/harbor_hub/manifests.yaml)。只有记录上游 revision、license、任务布局、资源要求、摘要、每类 worker 的奖励对比，以及一条完整 native 训练 batch 后，数据集才会标记为 `supported`。
+
+## 贡献、安全与许可
+
+贡献流程见 [CONTRIBUTING.md](CONTRIBUTING.md)，漏洞报告流程见 [SECURITY.md](SECURITY.md)。HarborRL 使用 MIT 许可证；第三方声明见 [LICENSE](LICENSE) 与 [NOTICE.md](NOTICE.md)。

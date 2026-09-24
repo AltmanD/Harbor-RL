@@ -1,378 +1,223 @@
-# LightRL
+# HarborRL
 
-<div align="center">
+HarborRL is a reinforcement-learning framework for tasks adapted to the Harbor format. It connects model serving, isolated task execution, verifier receipts, trajectory records, and GRPO training, then updates model parameters through a Slime/Megatron actor.
 
-<img src="assets/lightrl_logo_cropped.png" alt="LightRL Logo" width="100"/>
+[简体中文](README_zh.md)
 
-**A lightweight, efficient, and scalable RL post-training framework for agentic environments.**
+## Summary
 
-[![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)](pyproject.toml)
-[![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
-[![PyTorch](https://img.shields.io/badge/PyTorch-2.4%2B-ee4c2c.svg)](https://pytorch.org/)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+HarborRL targets training runs with the following properties:
 
-English | [简体中文](README_zh.md)
+- Model calls, task execution, verifier results, rewards, and policy versions are recorded as one rollout history rather than reconstructed later from logs.
+- Harbor tasks run in their environments on external workers, while the trainer keeps scheduling, data validation, and training responsibilities.
+- Native trajectory data is validated and exported in a backend-neutral form before Slime/Megatron consumes it.
 
-</div>
+HarborRL is not a benchmark distribution, model provider, Docker orchestration system, general RL library, or replacement for Slime, Megatron-LM, or SGLang.
 
-## Overview
+The framework is organized around four pluggable dimensions: dataset, harness, model, and train framework/algorithm. Their selections are declared separately in the training YAML, so an experiment can change one dimension without rewriting the rollout trajectory format or training-data export. The current defaults are a Harbor task catalog, a Claude Code harness, Qwen3-8B with SGLang serving semantics, and Slime/Megatron GRPO; this combination has passed CPU tests and a pinned GPU closed-loop run.
 
-LightRL is an RL post-training framework for training language-model agents in
-interactive environments. Each experiment is composed explicitly along four
-axes, making recipes easy to inspect, reproduce, and extend:
+## Framework
 
-| Axis | Current options | Entry point |
+HarborRL separates evidence-producing rollout from actor updates. The native side generates and validates task trajectories; the adapter side feeds only the accepted training fields to Slime's official hooks; Megatron remains the actor trainer.
+
+```text
+Training configuration
+    -> native group rollout and Harbor execution
+    -> Native IR and backend-neutral export
+    -> Slime v0.3.2 official hooks
+    -> Megatron actor update and checkpoint
+```
+
+| Area | Contents |
+| --- | --- |
+| Native pipeline | Configuration, Messages gateway, rollout scheduling, Harbor-job runner, trajectory validation, and export |
+| Training integration | Slime v0.3.2 hook adapter, version checks, launcher planning, and policy/checkpoint coordination |
+| Examples | Offline CPU fixture and a generic Qwen GPU launch template |
+| Tooling | Backend bootstrap, SGLang semantic probe, and publication audit |
+| Tests | CPU contracts for configuration, gateway, lifecycle, export, and adapter behavior |
+
+The pluggable dimensions are represented at a high level as follows:
+
+| Dimension | Current selection | Primary configuration |
 | --- | --- | --- |
-| Harness | Training: Camel-Agent, Claude Code CLI; evaluation also supports Terminus-2 | `agentic_rl/harnesses/`, `agentic_rl/harnesses/eval/` |
-| Environment | SETA, Agent-SafetyBench, AgentHarm, Tau2; SWE-smith / SWE-Verified conversion tools | `agentic_rl/environments/`, `agentic_rl/data/` |
-| Model | Recipe-defined (maintained recipes currently cover Qwen3-8B and GLM-5.1) | `configs/rollout/` |
-| Algorithm | GRPO / DAPO, DIVE-PO | Slime backend and `agentic_rl/algorithms/` |
+| Dataset | Harbor-format task catalog | `tasks` |
+| Harness | Claude Code profile | `harness` |
+| Model | Configured actor/reference checkpoints and serving semantics | `model` and `gateway` |
+| Train framework / algorithm | Slime/Megatron GRPO hooks | `training` |
 
-LightRL bundles the Slime and Megatron-LM training backends. Terminal
-environments run in isolated Docker workers and are accessed by training
-processes over HTTP. A worker may run on a dedicated CPU/Docker host or on the
-same host as GPU training; colocated deployments must reserve sufficient CPU,
-memory, Docker-network, and port capacity.
+## Install
 
-## Contents
+Use Python 3.10 or newer. The CPU development install does not require CUDA, Docker, model weights, Slime, Megatron-LM, or SGLang.
 
-- [Core capabilities](#core-capabilities)
-- [Execution model](#execution-model)
-- [Architecture](#architecture)
-- [Installation and requirements](#installation-and-requirements)
-- [Quickstart](#quickstart)
-- [Configuration and outputs](#configuration-and-outputs)
-- [Validation status](#validation-status)
-- [Development and extension](#development-and-extension)
-- [Documentation](#documentation)
-- [Acknowledgements](#acknowledgements)
-- [Citation](#citation)
-- [License](#license)
+Create and enter a virtual environment:
 
-## Core capabilities
+```bash
+python -m venv .venv
+. .venv/bin/activate
+```
 
-- **Recipe-driven training** — every experiment is a reviewable shell script;
-  `--dry-run` exposes the resolved data, model, parallelism, and backend command.
-- **Agentic environments** — the `EnvSpec` registry supports SETA,
-  Agent-SafetyBench, AgentHarm, and Tau2; SWE-smith / SWE-Verified are covered
-  by dataset conversion and terminal-worker tooling. Terminal tasks run in
-  isolated Docker workers.
-- **Explicit algorithm boundaries** — GRPO / DAPO come from the bundled Slime
-  backend; LightRL maintains DIVE-PO and the PRM reward agent under
-  `agentic_rl/algorithms/`.
-- **Low-cost extension** — environments, harnesses, and reward post-processors
-  have centralized registration points instead of scattered conditionals.
-- **Operational observability** — turn-level trajectories, JSONL metrics, W&B
-  curves, config snapshots, and dataset manifests share a categorized run
-  directory (`runs/training/`, `runs/evaluation/`, or `runs/testing/`).
-- **Bounded end-to-end checks** — 4-GPU smoke recipes cover rollout, reward
-  shaping, and actor updates without requiring a full training run.
+Expected result: `.venv/` is created and the shell prompt shows `(.venv)`. Neither command starts a service or modifies the examples.
 
-## Execution model
+Install the editable package with development tools:
+
+```bash
+python -m pip install --upgrade pip
+python -m pip install -e .[dev]
+```
+
+Expected result: pip installs HarborRL with `pytest` and `ruff`, but does not install the heavyweight training stack. The command completes without compiling CUDA kernels.
+
+Check the command-line entry point:
+
+```bash
+harborrl --help
+```
+
+Expected result: argparse prints the training CLI usage and exits with status 0. The public commands are `train` and `doctor`; both require `--config`.
+
+## CPU startup
+
+### Inspect the example launch plan
+
+```bash
+python -m harborrl.cli train --config examples/native/train_qwen_native.yaml --dry-run
+```
+
+Expected result: the command prints one JSON object with `config`, `command`, `environment`, and `training_command`. Paths in `config` are resolved to their absolute locations, GPU and sampling budgets are normalized, and `training_command` shows the external native-train dispatcher. It exits with status 0 and does not create a run directory, start Ray or Docker, load a model, or contact a worker.
+
+The example deliberately contains generic names such as `worker-1`, `/models/qwen3-8b`, and placeholder serving digests. Seeing those values in dry-run output is expected; they indicate what must be replaced before doctor or training.
+
+### Run the offline contract example
+
+```bash
+bash examples/native/cpu_contract_smoke.sh
+```
+
+Expected result: the script prints JSON with `"status": "passed"`, a 64-hex `task_digest`, `reward_contrast` of `[0.0, 1.0]`, opposite nonzero `advantages`, and identical rollout IDs for the two group members. It exits with status 0.
+
+The example locks the bundled hello-world task, constructs reward receipts for both outcomes, builds one complete Native IR group, exports a backend-neutral batch, and validates Slime adapter postprocessing. It does not use Docker, a live model, a Harbor worker, or a GPU, so success is CPU contract evidence rather than live training evidence.
+
+## GPU startup
+
+### Check the node and bootstrap pinned backends
+
+Confirm that the node exposes at least the configured number of GPUs:
+
+```bash
+nvidia-smi
+```
+
+Expected result: `nvidia-smi` lists the expected GPUs and their memory state. The example YAML defaults to eight GPUs, split into four actor GPUs and four rollout GPUs.
+
+On a node with Git, Docker, and network access, install the pinned open-source stack:
+
+```bash
+scripts/bootstrap_backends.sh /path/to/backends
+. /path/to/backends/harborrl-backend.env
+```
+
+Expected result: the script checks out Slime commit `3778dbf6d1a533ab478ecf5ddaa11449a47752b2`, Megatron-LM commit `1dcf0dafa884ad52ffb243625717a3471643e087`, pulls `lmsysorg/sglang:v0.5.15.post1-cu129`, and writes `harborrl-backend.env`. Sourcing that file sets `SLIME_DIR`, `MEGATRON_DIR`, and `SGLANG_IMAGE` in the current shell.
+
+For an offline GPU node, prepare the same repositories and image on a compatible machine, transfer them through shared storage, and export the same three environment variables. Doctor fails if the paths or versions do not match.
+
+### Prepare a private launch configuration
+
+Copy `examples/native/train_qwen_native.yaml` to an untracked private path. Replace the generic worker destinations, model and reference checkpoint paths, gateway origin, tokenizer/template digests, GPU layout, and output location. Also make `tasks.catalog` and `harness.profile` point to the intended catalog and profile; paths are resolved relative to the private YAML.
+
+Expected result: no tracked example file is modified, and the private YAML contains only values that are valid for your machines. Do not commit credentials, proxy settings, private task paths, or cluster-specific values.
+
+Validate the normalized private plan before preparing workers:
+
+```bash
+python -m harborrl.cli train --config /path/to/private.yaml --dry-run
+```
+
+Expected result: the JSON contains your private values and resolved paths, `training.backend_contract` remains `slime-v0.3.2-native-v1`, and the command still exits without creating a run directory or starting backends.
+
+### Prepare external Harbor workers
+
+Each worker needs Linux, Docker Engine, passwordless SSH from the trainer, Python 3.12 or newer, and Harbor `0.23.0`. The worker must be able to pull or locally build every task image in the catalog and reach the advertised Messages gateway. It does not need a model-provider API key.
+
+Install the matching HarborRL runner and Harbor runtime on each worker. A direct probe looks like:
+
+```bash
+ssh WORKER 'cd /path/to/Harbor-RL && /opt/harbor/bin/python -m harborrl.rollout.harbor_job.runner --probe'
+```
+
+Expected result: the worker prints JSON containing `harbor_version: 0.23.0`, a Python version of 3.12 or newer, available Claude option fields, and callable Harbor trial interfaces. The command exits with status 0 without creating a trial.
+
+Run workers under unprivileged accounts. Keep API keys, Claude settings, proxy credentials, and private task data off workers; the rollout passes only the sanitized runtime values required for a trial.
+
+### Run doctor
+
+```bash
+harborrl doctor --config /path/to/private.yaml
+```
+
+Expected result: doctor prints a JSON object containing `checks` and `scope`. Every check has `"ok": true`, the process exits with status 0, and no training run starts.
+
+Doctor checks the private YAML, catalog digests, model files, worker SSH probes, pinned backend paths and commits, required imports, hooks, GPU budget, and SGLang image tag. It does not start the model service or generate tokens, so serving protocol behavior, token IDs, and logprobs are verified by the subsequent live semantic check or actual training rather than by doctor.
+
+### Start training
+
+```bash
+harborrl train --config /path/to/private.yaml
+```
+
+Expected result: doctor runs again, then HarborRL creates a fresh directory under `output.root/training/` named with a timestamp and run ID. The run records its launch plan, source manifest, materialized task catalog, prompt rows, trajectories, policy history, metrics, and checkpoints according to the configured save interval. A successful run exits with status 0.
+
+If any preflight check fails, training does not start and failed checks are printed to stderr as JSON. If the backend exits unsuccessfully, the child status is propagated and the run directory retains the evidence available at failure for inspection.
+
+## Configuration and task format
+
+Training is configured with one YAML file that has a fixed section and field set. Relative paths resolve against the YAML file. Repeated `--set section.field=value` overrides are parsed as YAML values and validated again.
+
+| Section | Purpose |
+| --- | --- |
+| `execution` | Selects the fixed `harbor_job` backend |
+| `tasks` | Selects a nonempty immutable task catalog |
+| `harness` | Selects the Claude CLI, model, and timeout profile |
+| `harbor` | Configures Harbor version, interpreter, and SSH workers |
+| `gateway` | Configures the Messages listener, origin, serving digests, and raw-logprob audit |
+| `model` | Configures actor/reference checkpoints and the Slime model preset |
+| `training` | Configures rollout count, learning rate, save cadence, and backend identifier |
+| `sampling` | Configures group size, batch groups, retries, context, and generation limits |
+| `deployment` | Configures GPU count and actor/rollout parallelism |
+| `output` | Configures the run-tree root |
+
+A native task is a content-addressed directory:
 
 ```text
-Recipe script
-  → Slime launcher: data preparation, worker discovery, command assembly
-  → Rollout hook: harness + inference + environment interaction
-  → Reward shaping: score construction and optional DIVE-PO post-processing
-  → Actor update: training through Slime / Megatron-LM
+task/
+├── task.toml
+├── instruction.md
+├── environment/
+│   └── Dockerfile
+└── tests/
+    └── test.sh
 ```
 
-Terminal tasks require a Docker-capable worker exposed through `WORKER_URLS`.
-The worker may run on a dedicated CPU/Docker host or on the current GPU training
-host. Colocation is suitable for a resource-rich single machine, provided
-Docker containers and training processes do not contend for CPU, memory, disk,
-or ports. A single worker is contacted directly; multiple workers, or an
-explicit `START_ENV_POOL_SERVER=1`, enable the local lease router.
+The catalog identity is:
 
-## Architecture
-
-```text
-examples/training/<recipe>.sh
-  → agentic_rl/platform/slime_train.sh          # stable public launcher
-      ├─ slime_train/lib_*.sh                    # 7 phases: dirs, config, data, worker, args, launch
-      └─ slime/train_async.py                    # GRPO / DAPO backend
-          → agentic_rl/rollout/entrypoint.generate
-              ├─ environments/registry.py       # source, runtime, and reward policy registry
-              ├─ harnesses/factory.py           # Camel-Agent / Claude Code factory
-              ├─ rollout/backends/sglang.py     # shared sglang turn client
-              ├─ rollout/generate_steps.py      # multi-turn loop, scoring, exploration
-              └─ rollout/sample_builder.py      # reward shaping → Sample.reward["score"]
-          → algorithms/dive_po/rewards/dual_stream
-                                                   # optional group-normalized post-process
-```
-
-The launcher loads `lib_bootstrap`, `lib_run_dir`, `lib_rollout_cfg`,
-`lib_dataset`, `lib_worker`, `lib_args`, and `lib_launch` in order. Recipes rely
-only on the stable `slime_train.sh` entry point, keeping project logic separate
-from third-party backend details.
-
-### Repository layout
-
-```text
-LightRL/
-├── agentic_rl/
-│   ├── algorithms/
-│   │   ├── dive_po/         # DIVE-PO exploration, rewards, and defaults
-│   │   └── prm/             # PRM (process reward) agent
-│   ├── data/                # conversion, download, and training-data preparation
-│   ├── environments/        # EnvSpec registry, protocols, runtimes, rewards, HTTP client
-│   ├── harnesses/           # Camel-Agent / Claude Code harnesses and factory
-│   ├── misc/                # rollout logs and JSONL sink
-│   ├── platform/            # Slime launcher, worker/router, paths, env parsing
-│   └── rollout/             # hook, turn loop, serving backends, admission, trajectory store
-├── configs/rollout/         # rollout model templates; the retained composition layer
-├── examples/
-│   ├── training/            # maintained recipes and world_model/WIP entry points
-│   └── validation/          # topology-free validation helpers
-├── benchmarks/              # benchmark data and task definitions
-├── deploy/workers/          # Docker/SETA worker runtime and watchdogs
-├── deploy/runtime/          # Worker proxy, image-prep and dependency assets
-├── deploy/ops/              # Worker diagnostics, repair and cleanup
-├── deploy/archive/          # Historical compatibility-only entry points
-├── local/                   # Git-ignored operator workspace (local/README.md)
-│   ├── rjob/                # RJob submission and DinD evaluation
-│   ├── cluster/             # worker endpoints and watcher scripts
-│   ├── ops/                 # local container cleanup actions
-│   └── state/               # generated logs, locks and PIDs
-├── tools/                   # analysis, evaluation, and developer diagnostics
-│   └── evaluation/          # reusable orchestration and benchmark entry points
-├── tests/                   # pytest unit and integration tests
-├── slime/                   # bundled third-party rollout/training backend
-├── Megatron-LM/             # bundled third-party model-training backend
-├── runs/                    # git-ignored configs, logs, metrics, trajectories
-└── docs/                    # architecture, algorithms, config, evaluation, operations
-```
-
-## Installation and requirements
-
-- Python ≥ 3.10.
-- Real training requires a prepared runtime with CUDA, Slime, Megatron-LM, and
-  model checkpoints.
-- SETA and other terminal tasks require a Docker-capable worker, either on a
-  dedicated CPU host or on the current GPU training host.
-- Training processes must reach the worker service port (default `18081`);
-  use `127.0.0.1` for colocation or a training-reachable address across hosts.
-- Keep site addresses, credentials, and scheduling parameters in environment
-  variables or git-ignored `local/cluster/` files.
-- RJob submission and lifecycle helpers are local-only under `local/rjob/`.
-- The local workspace layout and state-handling rules are documented in the
-  ignored local file `local/README.md` when present; this file is not part of
-  the public repository.
-
-Install the Python package from source:
-
-```bash
-python3 -m pip install -e '.[rollout,worker,train]'
-python3 -c 'import agentic_rl'
-```
-
-This installs the Python package and selected optional dependencies only. It
-does not provision CUDA, model weights, or the cluster runtime required by
-Slime and Megatron-LM.
-
-## Quickstart
-
-### 1. Start and configure a worker
-
-Start the worker on the selected Docker host, which may be a dedicated CPU node
-or the current GPU training node. See the
-[Docker worker guide](deploy/workers/README.md) for runtime usage. Worker setup
-and repair commands are in [deploy/ops](deploy/ops/README.md), while proxy and
-image-preparation assets are in [deploy/runtime](deploy/runtime/README.md). On
-an already prepared machine, start the default pool server from the repository root:
-
-```bash
-bash deploy/workers/run_pool_server.sh
-```
-
-Then configure and check the endpoint in the training shell:
-
-```bash
-export WORKER_URLS=http://<WORKER_HOST>:18081
-curl --noproxy '*' --fail http://<WORKER_HOST>:18081/healthz
-```
-
-Use `127.0.0.1` for `<WORKER_HOST>` when worker and training run on the same
-host. For remote deployment, use a reachable IP or hostname. Supply multiple
-workers as a comma-separated `WORKER_URLS`, or use `WORKER_URLS_FILE`.
-
-For the maintained Qwen3-8B + SETA fixed12 + Camel-Agent 4-GPU evaluation,
-use the [one-click recipe](examples/evaluation/run_qwen3_8b_seta_fixed12_camel_4gpu.sh):
-
-```bash
-# Inspect the resolved configuration and command without starting services.
-bash examples/evaluation/run_qwen3_8b_seta_fixed12_camel_4gpu.sh --dry-run
-
-# Start after confirming cleanup of local Ray/SGLang processes.
-CONFIRM_LOCAL_CLEANUP=1 \
-  bash examples/evaluation/run_qwen3_8b_seta_fixed12_camel_4gpu.sh
-```
-
-The recipe requires 4 GPUs, a reachable `WORKER_URLS`, a Qwen3-8B checkpoint,
-and the project runtime dependencies (at minimum PyYAML, Ray, CUDA/sglang). It
-checks the SETA worker `/healthz` endpoint before launching
-`slime/eval_only.py`. Site-specific RJob/DinD submitters remain under the
-git-ignored `local/rjob/` directory and are intentionally not part of public
-recipes.
-
-### 2. Inspect a recipe
-
-The maintained entry points are listed below. `examples/training/world_model/`
-is WIP and is not a stable training recipe.
-
-| Recipe | Harness | Model | Environment | Algorithm |
-| --- | --- | --- | --- | --- |
-| `train_qwen3_8b_seta_dapo.sh` | Camel-Agent | Qwen3-8B | SETA | DAPO |
-| `train_qwen3_8b_seta_dive_po.sh` | Camel-Agent | Qwen3-8B | SETA | DIVE-PO |
-| `train_qwen3_8b_mixed_dapo.sh` | Camel-Agent | Qwen3-8B | SETA + Agent-SafetyBench + AgentHarm | DAPO |
-| `train_glm_5_1_seta_dapo.sh` | Camel-Agent | GLM-5.1 | SETA | DAPO |
-
-Run `--dry-run` in the GPU training environment to inspect the resolved data,
-model, parallelism, and backend command:
-
-```bash
-bash examples/training/train_qwen3_8b_seta_dapo.sh --dry-run
-bash examples/training/train_qwen3_8b_seta_dive_po.sh --dry-run
-bash examples/training/train_qwen3_8b_mixed_dapo.sh --dry-run
-bash examples/training/train_glm_5_1_seta_dapo.sh --dry-run
-```
-
-### 3. Launch training
-
-```bash
-WORKER_URLS=http://<WORKER_HOST>:18081 \
-NUM_GPUS=4 ACTOR_GPUS=2 ROLLOUT_GPUS=2 TP_SIZE=2 \
-ROLLOUT_NUM_GPUS_PER_ENGINE=2 \
-bash examples/training/train_qwen3_8b_seta_dapo.sh
-```
-
-Override the run name with `RUN_ID`. With `BACKGROUND=1`, launcher logs are
-written to `runs/training/<RUN_ID>/launcher.log`. The GLM-5.1 recipe additionally needs
-valid `HF_CKPT`, `REF_LOAD`, and compatible `MODEL_ARGS_FILE` values. See
-[training examples](examples/README.md) for the maintained entry points.
-
-### 4. Run source-level checks
-
-```bash
-python3 -m compileall -q agentic_rl
-python3 -m pytest tests/agentic_rl -q
-WORKER_URLS=http://127.0.0.1:18081 \
-  bash examples/training/train_qwen3_8b_seta_dapo.sh --dry-run
-```
-
-Generic development smoke checks live under `tools/dev/`. RJob submitters that
-contain site topology, credentials, or scheduler parameters live under the
-git-ignored `local/rjob/` directory, keeping public recipes portable.
-
-## Configuration and outputs
-
-### Training configuration
-
-Training defaults are defined in the recipe scripts. Environment-variable
-parsing is centralized in `agentic_rl/env.py`; the `ENV_VARS` table
-documents the rollout-side variables. Environment and data-source capabilities
-are declared in the `EnvSpec` table in `agentic_rl/environments/registry.py`,
-while rollout model templates live in `configs/rollout/`. Environment variables
-override recipe defaults; see [configuration](docs/configuration.md) for fields,
-precedence, and examples.
-
-Keep site-specific addresses, credentials, proxies, and scheduler capacity out
-of public recipes. Provide them through environment variables or git-ignored
-`local/cluster/` files.
-
-### Output layout
-
-Each run writes to its lifecycle directory (`training`, `evaluation`, or
-`testing`; debug runs use `testing/debug`):
-
-```text
-runs/<category>/<RUN_ID>/
-├── config/                # resolved config snapshot and dataset manifests
-├── logs/                  # train.log, metrics.jsonl, and launcher logs
-├── trajectories/          # per-sample traj.json and side-channel index.jsonl
-├── metrics/               # W&B and offline analysis artifacts
-├── environment_outputs/   # worker/AgentRunner environment artifacts
-└── meta.json              # run paths, version, and command metadata
-```
-
-`runs/latest` points to the most recent run. Runtime artifacts belong under
-`runs/`, not at the repository root. See
-[checkpoint and W&B storage](docs/operations/checkpoint-wandb.md) for
-storage conventions.
-
-## Validation status
-
-The recorded bounded validation (2026-08-07, 4 GPUs, after the P0–P2 refactor)
-reported:
-
-- SETA + DAPO: 3 rollouts, 6 actor training steps, finite non-zero updates, and
-  the `TRAINING_METRICS_OK` marker.
-- SETA + DIVE-PO: 3 rollouts, 7 actor steps, and 4 non-zero updates; complete
-  trajectory artifacts were exported with `EXAMPLE_VALIDATION_OK`.
-- Mixed SETA + Agent-SafetyBench + AgentHarm with DAPO: 8 metric records,
-  4 actor training steps, 4 non-zero updates, and `EXAMPLE_VALIDATION_OK`.
-
-These are short-horizon correctness checks, not convergence or benchmark
-results.
-
-## Development and extension
-
-Common source-level checks:
-
-```bash
-python3 -m pytest tests/ -q
-python3 -m compileall -q agentic_rl
-```
-
-- **Environment** — register an `EnvSpec` in
-  `agentic_rl/environments/registry.py` and implement the
-  `environments/protocol.py:EnvClient` contract. Runtime selection, scoring,
-  safety rewards, and trajectory aliases are centralized in the registry.
-- **Harness** — add `_HARNESS_ALIASES` / `_HARNESS_TARGETS` entries in
-  `agentic_rl/harnesses/factory.py` and implement the
-  `rollout/runner.py:RolloutAgent` protocol. Lazy imports isolate optional
-  dependencies.
-- **Reward post-processing** — expose `post_process_rewards(args, samples)`
-  and set `CUSTOM_REWARD_POST_PROCESS_PATH` to its import path.
-- **Training recipe** — reuse the stable launcher in `examples/training/` and a
-  model template from `configs/rollout/`; keep site paths and credentials local.
-
-## Documentation
-
-- [Architecture](docs/architecture.md) — boundaries, training path, router, registry
-- [Configuration](docs/configuration.md) — recipes, environment variables, precedence
-- [Deployment overview](deploy/README.md) — worker/runtime/ops boundaries and local RJob flow
-- [DIVE-PO reward math](docs/algorithms/dive_po_dual_stream.md) — dual-stream advantages
-- [Harness selection](docs/harnesses/README.md) — Camel-Agent / Claude Code integration
-- [Evaluation tools](docs/evaluation/README.md) — orchestration, SETA fixed12, and exports
-- [Docker worker](deploy/workers/README.md) — launch, capacity, prewarm, cleanup, recovery
-- [Worker operations](deploy/ops/README.md) — diagnostics, repair, cleanup, and provisioning
-- [Runtime assets](deploy/runtime/README.md) — proxy, image preparation, dependencies, systemd
-- [Checkpoint and W&B storage](docs/operations/checkpoint-wandb.md)
-- [Training examples](examples/README.md) — maintained recipes and validation entry points
-
-## Acknowledgements
-
-LightRL bundles [Slime](https://github.com/THUDM/slime) for rollout/training
-runtime and [Megatron-LM](https://github.com/NVIDIA/Megatron-LM) for model
-training. The agentic RL stack was originally developed in **OpenClaw-RL** and
-later extracted and refactored into this framework.
-
-## Citation
-
-If LightRL helps your research, please cite:
-
-```bibtex
-@misc{lightrl,
-  title={LightRL: A Lightweight, Efficient, Scalable RL Post-training Framework for Agentic Environments},
-  author={Pu, Yuan and Zhang, Shaoang and Zhang, Chenhao and Li, Xueyan and Lu, Yudong and Tang, Jia and Wang, Guanchu and Niu, Yazhe},
-  publisher={GitHub},
-  howpublished={\url{https://github.com/opendilab/LightRL}},
-  year={2026},
+```json
+{
+  "id": "task",
+  "revision": "source-revision",
+  "path": "relative/or/absolute-task",
+  "task_digest": "64-hex-sha256",
+  "reward_profile": {
+    "key": "reward",
+    "scale": 1.0,
+    "offset": 0.0,
+    "raw_range": [0, 1]
+  }
 }
 ```
 
-## License
+The verifier writes a shared-environment terminal result and `reward.json` or `reward.txt`. HarborRL resolves both through the reward profile, requires the selected values to agree, and records source bytes and SHA-256 receipts. Boolean and nonfinite rewards are rejected.
 
-[MIT](LICENSE)
+The machine-readable Hub inventory is [configs/harbor_hub/manifests.yaml](configs/harbor_hub/manifests.yaml). A dataset is marked `supported` only after its upstream revision, license, task layout, resource requirements, digests, worker-class reward contrast, and a complete native training batch have been recorded.
+
+## Contributing, security, and license
+
+Contributions and vulnerability reports follow [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md). HarborRL is released under the MIT license; see [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md) for third-party notices.

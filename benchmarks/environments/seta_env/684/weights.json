@@ -1,5 +1,0 @@
-{
-    "test_apt_update_works": 0.4,
-    "test_required_packages_installed": 0.4,
-    "test_system_cleanliness": 0.2
-}

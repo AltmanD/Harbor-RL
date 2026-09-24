@@ -1,6 +1,0 @@
-tool_call_parser: qwen25
-model_type: glm45-air
-harness_option: camel-agent
-max_iteration: 10
-non_think_mode: false
-trajectory_save_interval: 1

@@ -1,5 +1,0 @@
-{
-    "test_repository_cleanup": 0.35,
-    "test_postgresql_service_running": 0.35,
-    "test_postgresql_functional": 0.30
-}
