@@ -68,7 +68,6 @@ required = {
     "configs/harbor_hub/manifests.yaml",
     "examples/native/cpu_contract_smoke.sh",
     "examples/native/train_qwen_native.yaml",
-    "examples/native/worker_setup.md",
     "examples/native/tasks/hello_world/task.toml",
     "scripts/audit_public_tree.sh",
     "scripts/bootstrap_backends.sh",
