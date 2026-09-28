@@ -2,14 +2,20 @@
   <img src="assets/HarborRL-title.jpg" alt="HarborRL" width=800>
 </p>
 
-> HarborRL is a lightweight framework for agentic reinforcement learning
+<p align="center">
+  <strong>A lightweight agentic reinforcement learning framework for everyone</strong>
+</p>
 
-[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](pyproject.toml)
-[![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
-[![PyTorch](https://img.shields.io/badge/PyTorch-2.4%2B-ee4c2c.svg)](https://pytorch.org/)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+<p align="center">
+  <a href="pyproject.toml"><img src="https://img.shields.io/badge/version-1.0.0-blue.svg" alt="Version"></a>
+  <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.10%2B-blue.svg" alt="Python 3.10+"></a>
+  <a href="https://pytorch.org/"><img src="https://img.shields.io/badge/PyTorch-2.4%2B-ee4c2c.svg" alt="PyTorch 2.4+"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT License"></a>
+</p>
 
-[English] · [简体中文](README_zh.md)
+<p align="center">
+  English · <a href="README_zh.md">简体中文</a>
+</p>
 
 ---
 
