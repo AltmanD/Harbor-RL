@@ -3,6 +3,10 @@
 </p>
 
 <p align="center">
+  <h1>HarborRL</h1>
+</p>
+
+<p align="center">
   <strong>A lightweight agentic reinforcement learning framework for everyone</strong>
 </p>
 
@@ -44,89 +48,28 @@
 
 ## About
 
-HarborRL is a lightweight framework for training tool-using agents on verifiable,
-sandboxed tasks. It makes model serving, trajectory generation, tool execution,
-verifier rewards, and policy updates into a single reproducible pipeline.
+HarborRL is a lightweight framework for training tool-using agents on verifiable, sandboxed tasks. It makes model serving, trajectory generation, tool execution, verifier rewards, and policy updates into a single reproducible pipeline.
 
 HarborRL supports flexible combinations of **Models × Algorithms × Tasks × Harnesses (MATH)**:
 
 - **Models:** RL training using Qwen and GLM as base models.
 - **Algorithms:** GRPO and DAPO for RL training.
-- **Tasks:** RL training on **200+** Harbor-format tasks in isolated workers,
-  including Terminal-Bench, SWE-Bench, Deep-SWE, and more.
-- **Harnesses:** RL training with **40+** harness frameworks, including Claude
-  Code, Codex, LangGraph, SWE-agent, and more.
+- **Tasks:** RL training on **200+** Harbor-format tasks in isolated workers, including Terminal-Bench, SWE-Bench, Deep-SWE, and more.
+- **Harnesses:** RL training with **40+** harness frameworks, including Claude Code, Codex, LangGraph, SWE-agent, and more.
 
 ## Quick Start
 
-### Check the node and bootstrap pinned backends
-
-Confirm that the node exposes at least the configured number of GPUs:
+After preparing a YAML from `examples/native/train_qwen_native.yaml`, start the complete native pipeline with one command:
 
 ```bash
-nvidia-smi
+bash scripts/launch_native.sh \
+  --config /path/to/private.yaml \
+  --backends /path/to/harborrl-backends
 ```
 
-Expected result: `nvidia-smi` lists the expected GPUs and their memory state. The example YAML defaults to eight GPUs, split into four actor GPUs and four rollout GPUs.
+The launcher reuses an existing `harborrl-backend.env` or bootstraps the pinned Slime, Megatron-LM, and SGLang stack; loads those settings; and invokes `harborrl train`. Training reruns doctor, creates a timestamped run under `output.root/training/`, and starts only after configuration, tasks, workers, checkpoints, backend versions, dependencies, and GPU budget pass preflight.
 
-On a node with Git, Docker, and network access, install the pinned open-source stack:
-
-```bash
-scripts/bootstrap_backends.sh /path/to/backends
-. /path/to/backends/harborrl-backend.env
-```
-
-Expected result: the script checks out Slime commit `3778dbf6d1a533ab478ecf5ddaa11449a47752b2`, Megatron-LM commit `1dcf0dafa884ad52ffb243625717a3471643e087`, pulls `lmsysorg/sglang:v0.5.15.post1-cu129`, and writes `harborrl-backend.env`. Sourcing that file sets `SLIME_DIR`, `MEGATRON_DIR`, and `SGLANG_IMAGE` in the current shell.
-
-For an offline GPU node, prepare the same repositories and image on a compatible machine, transfer them through shared storage, and export the same three environment variables. Doctor fails if the paths or versions do not match.
-
-### Prepare a private launch configuration
-
-Copy `examples/native/train_qwen_native.yaml` to an untracked private path. Replace the generic worker destinations, model and reference checkpoint paths, gateway origin, tokenizer/template digests, GPU layout, and output location. Also make `tasks.catalog` and `harness.profile` point to the intended catalog and profile; paths are resolved relative to the private YAML.
-
-Expected result: no tracked example file is modified, and the private YAML contains only values that are valid for your machines. Do not commit credentials, proxy settings, private task paths, or cluster-specific values.
-
-Validate the normalized private plan before preparing workers:
-
-```bash
-python -m harborrl.cli train --config /path/to/private.yaml --dry-run
-```
-
-Expected result: the JSON contains your private values and resolved paths, `training.backend_contract` remains `slime-v0.3.2-native-v1`, and the command still exits without creating a run directory or starting backends.
-
-### Prepare external Harbor workers
-
-Each worker needs Linux, Docker Engine, passwordless SSH from the trainer, Python 3.12 or newer, and Harbor `0.23.0`. The worker must be able to pull or locally build every task image in the catalog and reach the advertised Messages gateway. It does not need a model-provider API key.
-
-Install the matching HarborRL runner and Harbor runtime on each worker. A direct probe looks like:
-
-```bash
-ssh WORKER 'cd /path/to/Harbor-RL && /opt/harbor/bin/python -m harborrl.rollout.harbor_job.runner --probe'
-```
-
-Expected result: the worker prints JSON containing `harbor_version: 0.23.0`, a Python version of 3.12 or newer, available Claude option fields, and callable Harbor trial interfaces. The command exits with status 0 without creating a trial.
-
-Run workers under unprivileged accounts. Keep API keys, Claude settings, proxy credentials, and private task data off workers; the rollout passes only the sanitized runtime values required for a trial.
-
-### Run doctor
-
-```bash
-harborrl doctor --config /path/to/private.yaml
-```
-
-Expected result: doctor prints a JSON object containing `checks` and `scope`. Every check has `"ok": true`, the process exits with status 0, and no training run starts.
-
-Doctor checks the private YAML, catalog digests, model files, worker SSH probes, pinned backend paths and commits, required imports, hooks, GPU budget, and SGLang image tag. It does not start the model service or generate tokens, so serving protocol behavior, token IDs, and logprobs are verified by the subsequent live semantic check or actual training rather than by doctor.
-
-### Start training
-
-```bash
-harborrl train --config /path/to/private.yaml
-```
-
-Expected result: doctor runs again, then HarborRL creates a fresh directory under `output.root/training/` named with a timestamp and run ID. The run records its launch plan, source manifest, materialized task catalog, prompt rows, trajectories, policy history, metrics, and checkpoints according to the configured save interval. A successful run exits with status 0.
-
-If any preflight check fails, training does not start and failed checks are printed to stderr as JSON. If the backend exits unsuccessfully, the child status is propagated and the run directory retains the evidence available at failure for inspection.
+Use `--doctor` for preflight only or `--dry-run` to print the resolved plan. The private YAML must point to reachable Harbor workers, task catalog and harness profile, model/reference checkpoints, gateway URL and serving digests, GPU layout, and output root. Keep credentials and site-specific values out of the repository.
 
 
 
