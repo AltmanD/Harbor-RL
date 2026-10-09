@@ -8,10 +8,10 @@ ROOT = Path(__file__).resolve().parents[2]
 __all__ = ["ROOT", "launch_plan", "load_config"]
 
 
-def load_config(path, overrides=None):
+def load_config(path, overrides=None, task_ids=None):
     from .native import load_config as _load_config
 
-    return _load_config(path, overrides)
+    return _load_config(path, overrides, task_ids)
 
 
 def launch_plan(config):

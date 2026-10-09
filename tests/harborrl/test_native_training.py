@@ -105,6 +105,41 @@ def test_schema2_launch_plan_and_strict_override(tmp_path, capsys):
         load_config(path)
 
 
+
+def test_cli_command_mode_selects_experiment_dimensions(tmp_path, capsys, monkeypatch):
+    path, task = native_config(tmp_path)
+    from harborrl.data.harbor.native_inspector import inspect_native
+    digest = inspect_native(task)["task_digest"]
+    catalog_path = json.loads(path.read_text().split("tasks: ", 1)[1].split("\n", 1)[0])["catalog"]
+    catalog = json.loads(Path(catalog_path).read_text())
+    catalog[0]["task_digest"] = digest
+    Path(catalog_path).write_text(json.dumps(catalog))
+    private_config = tmp_path / "config.yaml"
+    private_config.write_text(path.read_text())
+    monkeypatch.chdir(tmp_path)
+
+    from harborrl.config.native import catalog as native_catalog
+    selected = native_catalog(load_config(private_config, task_ids=["task"]))
+    assert [entry["id"] for entry in selected] == ["task"]
+
+    from harborrl.cli import main
+    assert main([
+        "train",
+        "-model", "qwen3-8B",
+        "-harness", "claude-code",
+        "-task", "task",
+        "-alg", "grpo",
+        "--dry-run",
+    ]) == 0
+    plan = json.loads(capsys.readouterr().out)
+    assert plan["config"]["model"]["args_file"] == "qwen3-8B"
+    assert plan["config"]["harness"]["name"] == "claude_code"
+
+    assert main(["train", str(private_config), "--dry-run"]) == 0
+    positional_plan = json.loads(capsys.readouterr().out)
+    assert positional_plan["config"]["schema_version"] == 2
+
+
 def test_native_shell_dry_run_uses_official_v032_hooks(tmp_path):
     native_config(tmp_path)
     prompt = tmp_path / "native.jsonl"

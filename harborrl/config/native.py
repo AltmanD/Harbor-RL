@@ -23,7 +23,13 @@ FIELDS = {
 }
 
 
-def load_config(path, overrides=None):
+class SelectedConfig(dict):
+    def __init__(self, config, task_ids):
+        super().__init__(config)
+        self.task_ids = tuple(task_ids)
+
+
+def load_config(path, overrides=None, task_ids=None):
     """Load one schema-2 YAML file and apply strict ``section.key=value`` overrides."""
     path = Path(path).resolve()
     config = yaml.safe_load(path.read_text())
@@ -40,7 +46,14 @@ def load_config(path, overrides=None):
                 or not isinstance(section, dict)):
             raise ValueError(f'unknown native override: {key}')
         section[field] = yaml.safe_load(value)
-    return validate(config, path)
+    config = validate(config, path)
+    if task_ids is None:
+        return config
+    if (not isinstance(task_ids, (list, tuple)) or not task_ids
+            or any(not isinstance(task_id, str) or not task_id.strip()
+                   for task_id in task_ids)):
+        raise ValueError('task selectors must be nonempty strings')
+    return SelectedConfig(config, task_ids)
 
 
 def validate(config, path):
@@ -134,6 +147,12 @@ def catalog(config):
         if report['status'] != 'NEEDS_PROBE':
             raise ValueError(f"task preflight failed: {entry['id']}: {report['reasons']}")
         RewardProfile(**entry['reward_profile'])
+    selected = set(getattr(config, 'task_ids', ()))
+    if selected:
+        missing = selected - {entry['id'] for entry in entries}
+        if missing:
+            raise ValueError(f'task selector not found in catalog: {sorted(missing)[0]}')
+        entries = [entry for entry in entries if entry['id'] in selected]
     return entries
 
 
