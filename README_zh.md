@@ -60,33 +60,24 @@ bash scripts/launch_native.sh --config config.yaml --backends /path/to/harborrl-
 
 ## 安装
 
-使用 Python 3.10 或更新版本。Python 依赖和 `harborrl` 命令声明在[pyproject.toml](pyproject.toml)中。CPU 开发环境不需要 CUDA、Docker、模型权重、Slime、Megatron-LM 或 SGLang。
+使用 Python 3.10 或更新版本。Python 依赖、开发依赖和 `harborrl` 命令由 [pyproject.toml](pyproject.toml) 与 [uv.lock](uv.lock) 锁定。CPU 开发环境不需要 CUDA、Docker、模型权重、Slime、Megatron-LM 或 SGLang。
 
-创建并进入虚拟环境：
-
-```bash
-python -m venv .venv
-. .venv/bin/activate
-```
-
-预期结果：创建 `.venv/`，shell 提示符显示 `(.venv)`。两个命令都不会启动服务，也不会修改示例。
-
-安装可编辑包和开发工具：
+安装 [uv](https://docs.astral.sh/uv/) 0.9 或更新版本，然后同步锁定的 CPU 开发环境：
 
 ```bash
-python -m pip install --upgrade pip
-python -m pip install -e .[dev]
+uv sync --dev
 ```
 
-预期结果：pip 安装 HarborRL、`pytest` 和 `ruff`，但不会安装重型训练栈，也不会编译 CUDA kernel。
+预期结果：uv 读取 `uv.lock`，创建 `.venv/`，并安装 HarborRL、`pytest` 和 `ruff`。该命令不会安装 CUDA kernel、Docker、模型权重、Slime、Megatron-LM 或 SGLang。
 
-检查命令行入口：
+通过锁定环境运行命令：
 
 ```bash
-harborrl --help
+uv run harborrl --help
+uv run pytest
 ```
 
-预期结果：argparse 输出 HarborRL CLI 用法并以状态码 0 退出。公开命令是 `train` 和 `doctor`；`train` 支持命令组合或 YAML 文件，`doctor` 用于验证 YAML 部署。
+预期结果：uv 直接执行已安装的入口和测试，不需要手动激活虚拟环境。`train` 支持命令组合或 YAML 文件；`doctor` 用于校验 YAML 部署。
 
 使用 bash 安装固定版本的 native 训练栈：
 
@@ -99,7 +90,7 @@ bash scripts/bootstrap_backends.sh /path/to/harborrl-backends
 
 训练由一个 YAML 文件配置，其 section 和字段集合固定。相对路径按 YAML 文件所在目录解析。可重复使用 `--set section.field=value` 覆盖配置；值会按 YAML 解析并再次校验。
 
-HarborRL 直接索引 Harbor 任务。只要 Harbor 能运行一个任务，HarborRL 就能通过锁定的 catalog 条目接入它，而不维护另一套并行任务格式。
+HarborRL 直接索引 Harbor 任务。只要 Hub dataset/task 符合 Harbor 任务格式，并能通过 HarborRL 的内容寻址检查，就可以通过锁定的 catalog 条目接入；HarborRL 不维护另一套 dataset 私有任务格式。公开静态与动态验证覆盖情况见[Harbor Hub 兼容性汇总](configs/harbor_hub/public_compatibility_summary_zh.md)。
 
 | Section | 用途 |
 | --- | --- |

@@ -60,33 +60,24 @@ The command style is a shorthand over `config.yaml` in the working directory (or
 
 ## Install
 
-Use Python 3.10 or newer. Python dependencies and the `harborrl` command are declared in [pyproject.toml](pyproject.toml). The CPU development install does not require CUDA, Docker, model weights, Slime, Megatron-LM, or SGLang.
+Use Python 3.10 or newer. Runtime dependencies, development dependencies, and the `harborrl` command are locked by [pyproject.toml](pyproject.toml) and [uv.lock](uv.lock). The CPU development install does not require CUDA, Docker, model weights, Slime, Megatron-LM, or SGLang.
 
-Create and enter a virtual environment:
-
-```bash
-python -m venv .venv
-. .venv/bin/activate
-```
-
-Expected result: `.venv/` is created and the shell prompt shows `(.venv)`. Neither command starts a service or modifies the examples.
-
-Install the editable package with development tools:
+Install [uv](https://docs.astral.sh/uv/) 0.9 or newer, then synchronize the locked CPU development environment:
 
 ```bash
-python -m pip install --upgrade pip
-python -m pip install -e .[dev]
+uv sync --dev
 ```
 
-Expected result: pip installs HarborRL with `pytest` and `ruff`, but does not install the heavyweight training stack. The command completes without compiling CUDA kernels.
+Expected result: uv reads `uv.lock`, creates `.venv/`, and installs HarborRL with `pytest` and `ruff`. The command does not install CUDA kernels, Docker, model weights, Slime, Megatron-LM, or SGLang.
 
-Check the command-line entry point:
+Run commands through the locked environment:
 
 ```bash
-harborrl --help
+uv run harborrl --help
+uv run pytest
 ```
 
-Expected result: argparse prints the HarborRL CLI usage and exits with status 0. The public commands are `train` and `doctor`; `train` accepts command composition or a YAML file, while `doctor` validates a YAML deployment.
+Expected result: uv executes the installed entry point and tests without activating the virtual environment manually. `train` accepts command composition or a YAML file; `doctor` validates a YAML deployment.
 
 Install the pinned native training stack with bash:
 
@@ -99,7 +90,7 @@ bash scripts/bootstrap_backends.sh /path/to/harborrl-backends
 
 Training is configured with one YAML file that has a fixed section and field set. Relative paths resolve against the YAML file. Repeated `--set section.field=value` overrides are parsed as YAML values and validated again.
 
-HarborRL indexes Harbor tasks directly. If Harbor can run a task, HarborRL can consume it through a locked catalog entry without maintaining a separate task format.
+HarborRL indexes Harbor tasks directly. Any Hub dataset or task that follows the Harbor task format and passes HarborRL's content-addressed inspection can be consumed through a locked catalog entry; HarborRL does not maintain a separate dataset-specific task format. See [the public Harbor Hub compatibility summary](configs/harbor_hub/public_compatibility_summary.md) for aggregate static and dynamic validation coverage.
 
 | Section | Purpose |
 | --- | --- |

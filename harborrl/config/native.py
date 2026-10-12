@@ -151,7 +151,7 @@ def catalog(config):
     if selected:
         missing = selected - {entry['id'] for entry in entries}
         if missing:
-            raise ValueError(f'task selector not found in catalog: {sorted(missing)[0]}')
+            raise ValueError(f'task selector not found in catalog: {min(missing)}')
         entries = [entry for entry in entries if entry['id'] in selected]
     return entries
 
@@ -161,11 +161,21 @@ def launch_plan(config):
     from harborrl.config import ROOT
     catalog(config)
     c = config
+    worker_overrides = os.environ.get('HARBORRL_NATIVE_TASK_WORKER_OVERRIDES', '{}')
+    try:
+        overrides = json.loads(worker_overrides)
+        valid_workers = set(c['harbor']['workers'])
+        if (not isinstance(overrides, dict) or any(not isinstance(key, str) or value not in valid_workers
+                                                   for key, value in overrides.items())):
+            raise ValueError
+    except (ValueError, json.JSONDecodeError) as exc:
+        raise ValueError('invalid HARBORRL_NATIVE_TASK_WORKER_OVERRIDES') from exc
     environment = {
         'DATASET': 'native', 'ALGO': 'grpo', 'HARNESS_OPTION': 'native-claude-code',
         'HF_CKPT': c['model']['checkpoint'], 'REF_LOAD': c['model']['reference'],
         'MODEL_ARGS_FILE': c['model']['args_file'], 'MODEL_TAG': c['model']['args_file'],
         'NUM_ROLLOUT': c['training']['num_rollout'], 'SAVE_INTERVAL': c['training']['save_interval'],
+        'TRAIN_PYTHON': sys.executable,
         'ROLLOUT_BATCH_SIZE': c['sampling']['groups_per_batch'],
         'N_SAMPLES': c['sampling']['group_size'],
         'ROLLOUT_MAX_RESPONSE_LEN': c['sampling']['max_tokens'],
@@ -183,6 +193,7 @@ def launch_plan(config):
         'HARBORRL_NATIVE_SLIME_CONTRACT': runtime_contract_id(c['training']['backend_contract']),
         'HARBORRL_NATIVE_RUNNER_PYTHON': c['harbor']['python'],
         'HARBORRL_NATIVE_RUNNER_WORKERS': json.dumps(c['harbor']['workers']),
+        'HARBORRL_NATIVE_TASK_WORKER_OVERRIDES': json.dumps(overrides, sort_keys=True),
         'HARBORRL_NATIVE_PROFILE': c['harness']['profile'],
         'HARBORRL_NATIVE_CATALOG': c['tasks']['catalog'],
         'HARBORRL_NATIVE_GATEWAY_HOST': c['gateway']['host'],

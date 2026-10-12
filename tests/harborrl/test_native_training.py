@@ -86,6 +86,8 @@ def test_schema2_launch_plan_and_strict_override(tmp_path, capsys):
     assert plan["environment"]["HARBORRL_NATIVE_AUDITED_LOGPROBS"] == "1"
     assert json.loads(plan["environment"]["HARBORRL_NATIVE_RUNNER_WORKERS"]) == ["worker-a", "worker-b"]
     assert plan["environment"]["N_SAMPLES"] == "2"
+    assert plan["environment"]["TRAIN_PYTHON"] == sys.executable
+    assert json.loads(plan["environment"]["HARBORRL_NATIVE_TASK_WORKER_OVERRIDES"]) == {}
     assert plan["training_command"][0] == "bash"
     assert plan["launcher"].startswith("native Claude Code")
     from harborrl.cli import main

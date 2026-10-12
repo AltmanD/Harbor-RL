@@ -279,6 +279,10 @@ def dispatch(plan, *, doctor_only=False):
     child_env = {key: value for key, value in os.environ.items() if key in allowed}
     child_env["PATH"] = os.pathsep.join(
         [str(Path(sys.executable).parent), child_env.get("PATH", os.defpath)])
+    child_env["PYTHONPATH"] = os.pathsep.join(filter(None, [
+        child_env.get("SLIME_DIR", ""), child_env.get("MEGATRON_DIR", ""),
+        str(ROOT), child_env.get("PYTHONPATH", ""),
+    ]))
     child_env.update(environment)
     child = subprocess.Popen(plan["training_command"], cwd=ROOT, env=child_env, start_new_session=True)
 
