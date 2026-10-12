@@ -38,6 +38,12 @@ HarborRL supports flexible combinations of **Models × Algorithms × Tasks × Ha
 - **Tasks:** RL training on **200+** Harbor-format tasks in isolated workers, including Terminal-Bench, SWE-Bench, Deep-SWE, and more.
 - **Harnesses:** RL training with **40+** harness frameworks, including Claude Code, Codex, LangGraph, SWE-agent, and more.
 
+## Agent-Assisted Deployment
+
+If you want an AI agent to help deploy this repository and verify training,
+ask it to first read and strictly follow
+[docs/agents/environment-check.md](docs/agents/environment-check.md).
+
 ## Quick Start
 
 After [installation](#install), choose one of the two configuration styles:
@@ -86,57 +92,25 @@ bash scripts/bootstrap_backends.sh /path/to/harborrl-backends
 . /path/to/harborrl-backends/harborrl-backend.env
 ```
 
-## Configuration and task format
+## Configuration and tasks
 
-Training is configured with one YAML file that has a fixed section and field set. Relative paths resolve against the YAML file. Repeated `--set section.field=value` overrides are parsed as YAML values and validated again.
+Training is configured with one YAML file that has a fixed section and field set. Relative paths resolve against the YAML file, and repeated `--set section.field=value` overrides are parsed as YAML values and validated again. Start site-specific configurations from [examples/native/train_qwen_native.yaml](examples/native/train_qwen_native.yaml).
 
-HarborRL indexes Harbor tasks directly. Any Hub dataset or task that follows the Harbor task format and passes HarborRL's content-addressed inspection can be consumed through a locked catalog entry; HarborRL does not maintain a separate dataset-specific task format. See [the public Harbor Hub compatibility summary](configs/harbor_hub/public_compatibility_summary.md) for aggregate static and dynamic validation coverage.
+The configuration has three broad parts: `execution` is fixed to `harbor_job`; `harbor`, `gateway`, and `deployment` describe rollout workers, service endpoints, and GPU topology; `tasks`, `harness`, `model`, `training`, `sampling`, and `output` describe the experiment and its outputs.
 
-| Section | Purpose |
-| --- | --- |
-| `execution` | Selects the fixed `harbor_job` backend |
-| `tasks` | Selects a nonempty immutable task catalog |
-| `harness` | Selects the Claude CLI, model, and timeout profile |
-| `harbor` | Configures Harbor version, interpreter, and SSH workers |
-| `gateway` | Configures the Messages listener, origin, serving digests, and raw-logprob audit |
-| `model` | Configures actor/reference checkpoints and the Slime model preset |
-| `training` | Configures rollout count, learning rate, save cadence, and backend identifier |
-| `sampling` | Configures group size, batch groups, retries, context, and generation limits |
-| `deployment` | Configures GPU count and actor/rollout parallelism |
-| `output` | Configures the run-tree root |
-
-A native task is a content-addressed directory:
+HarborRL consumes Harbor-recognized native tasks directly and does not maintain private conversion formats for individual benchmarks. A typical task directory is:
 
 ```text
 task/
 ├── task.toml
 ├── instruction.md
-├── environment/
-│   └── Dockerfile
-└── tests/
-    └── test.sh
+├── environment/Dockerfile
+└── tests/test.sh
 ```
 
-The catalog identity is:
+Here, `task.toml` declares resources, the agent, and the verifier; `instruction.md` is the agent-facing instruction; `environment/Dockerfile` builds the isolated environment; and `tests/test.sh` verifies the result and writes `reward.json` or `reward.txt`. For training, tasks are locked into a catalog with their task ID, upstream revision, local path, content digest, and reward parsing rules; see [examples/native/catalog.json](examples/native/catalog.json).
 
-```json
-{
-  "id": "task",
-  "revision": "source-revision",
-  "path": "relative/or/absolute-task",
-  "task_digest": "64-hex-sha256",
-  "reward_profile": {
-    "key": "reward",
-    "scale": 1.0,
-    "offset": 0.0,
-    "raw_range": [0, 1]
-  }
-}
-```
-
-The verifier writes a shared-environment terminal result and `reward.json` or `reward.txt`. HarborRL resolves both through the reward profile, requires the selected values to agree, and records source bytes and SHA-256 receipts. Boolean and nonfinite rewards are rejected.
-
-The machine-readable Hub inventory is [configs/harbor_hub/manifests.yaml](configs/harbor_hub/manifests.yaml). A dataset is marked `supported` only after its upstream revision, license, task layout, resource requirements, digests, worker-class reward contrast, and a complete native training batch have been recorded.
+The bundled runnable example is `hello_world`. Real training tasks are not repackaged by this repository: fetch Harbor-native datasets or tasks from Harbor Hub, and use the [compatibility summary](configs/harbor_hub/public_compatibility_summary.md) to understand validated coverage. After fetching a task root, validate it locally with `harborrl hub inspect` and lock it into your own catalog.
 
 ## License
 

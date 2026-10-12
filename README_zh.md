@@ -38,6 +38,11 @@ HarborRL 支持 **Models × Algorithms × Tasks × Harnesses (MATH)** 的灵活�
 - **Tasks：**在隔离 worker 中对 **200+** 个 Harbor 格式任务进行 RL 训练，包括 Terminal-Bench、SWE-Bench、Deep-SWE 等。
 - **Harnesses：**支持 **40+** 个 harness 框架进行 RL 训练，包括 Claude Code、Codex、LangGraph、SWE-agent 等。
 
+## Agent 辅助部署
+
+如果你希望让 AI agent 辅助完成本 repo 的部署和训练验证，请让它先阅读并严格遵循
+[docs/agents/environment-check.md](docs/agents/environment-check.md)。
+
 ## 快速开始
 
 完成[安装](#安装)后，从两种配置方式中选择一种：
@@ -86,57 +91,25 @@ bash scripts/bootstrap_backends.sh /path/to/harborrl-backends
 . /path/to/harborrl-backends/harborrl-backend.env
 ```
 
-## 运行配置与任务格式
+## 运行配置与任务
 
-训练由一个 YAML 文件配置，其 section 和字段集合固定。相对路径按 YAML 文件所在目录解析。可重复使用 `--set section.field=value` 覆盖配置；值会按 YAML 解析并再次校验。
+训练由一个 YAML 文件配置，其 section 和字段集合固定。相对路径按 YAML 文件所在目录解析，可重复使用 `--set section.field=value` 覆盖并再次校验。请从 [examples/native/train_qwen_native.yaml](examples/native/train_qwen_native.yaml) 开始修改 site-specific 配置。
 
-HarborRL 直接索引 Harbor 任务。只要 Hub dataset/task 符合 Harbor 任务格式，并能通过 HarborRL 的内容寻址检查，就可以通过锁定的 catalog 条目接入；HarborRL 不维护另一套 dataset 私有任务格式。公开静态与动态验证覆盖情况见[Harbor Hub 兼容性汇总](configs/harbor_hub/public_compatibility_summary_zh.md)。
+配置大体分为三部分：`execution` 固定使用 `harbor_job`；`harbor`、`gateway` 和 `deployment` 描述 rollout worker、服务入口与 GPU 拓扑；`tasks`、`harness`、`model`、`training`、`sampling` 和 `output` 描述实验内容与输出位置。
 
-| Section | 用途 |
-| --- | --- |
-| `execution` | 固定选择 `harbor_job` backend |
-| `tasks` | 选择非空 immutable task catalog |
-| `harness` | 选择 Claude CLI、模型和 timeout profile |
-| `harbor` | 配置 Harbor 版本、解释器和 SSH worker |
-| `gateway` | 配置 Messages listener、origin、serving 摘要和 raw-logprob 审计 |
-| `model` | 配置 actor/reference checkpoint 和 Slime model preset |
-| `training` | 配置 rollout 数、学习率、保存节奏和 backend 标识 |
-| `sampling` | 配置 group 大小、batch group 数、重试、上下文和生成限制 |
-| `deployment` | 配置 GPU 数量和 actor/rollout 并行度 |
-| `output` | 配置 run tree 根目录 |
-
-一个 native task 是内容寻址目录：
+HarborRL 直接消费 Harbor 认可的 native task，不维护各 benchmark 的私有任务转换格式。典型任务目录是：
 
 ```text
 task/
 ├── task.toml
 ├── instruction.md
-├── environment/
-│   └── Dockerfile
-└── tests/
-    └── test.sh
+├── environment/Dockerfile
+└── tests/test.sh
 ```
 
-catalog 身份格式为：
+其中 `task.toml` 声明资源、agent 与 verifier，`instruction.md` 是给 agent 的任务说明，`environment/Dockerfile` 构建隔离执行环境，`tests/test.sh` 负责验证并输出 `reward.json` 或 `reward.txt`。训练时，这些任务会被锁定到 catalog 中，记录任务 ID、上游 revision、本地路径、内容 digest 和 reward 解析规则；示例见 [examples/native/catalog.json](examples/native/catalog.json)。
 
-```json
-{
-  "id": "task",
-  "revision": "source-revision",
-  "path": "relative/or/absolute-task",
-  "task_digest": "64-hex-sha256",
-  "reward_profile": {
-    "key": "reward",
-    "scale": 1.0,
-    "offset": 0.0,
-    "raw_range": [0, 1]
-  }
-}
-```
-
-verifier 会写出共享环境 terminal result 以及 `reward.json` 或 `reward.txt`。HarborRL 通过 reward profile 解析两者，要求选定值一致，并记录源字节和 SHA-256 回执。布尔值和非有限 reward 会被拒绝。
-
-机器可读 Hub inventory 位于[configs/harbor_hub/manifests.yaml](configs/harbor_hub/manifests.yaml)。只有记录上游 revision、license、任务布局、资源要求、摘要、每类 worker 的奖励对比，以及一条完整 native 训练 batch 后，数据集才会标记为 `supported`。
+仓库内置的可直接运行示例是 `hello_world`。实际训练任务不由本 repo 重新打包，而是从 Harbor Hub 获取符合 Harbor native task 格式的 dataset/task；可先查看[兼容性汇总](configs/harbor_hub/public_compatibility_summary_zh.md)了解已验证覆盖情况。取回 task root 后，先用 `harborrl hub inspect` 做本地静态校验，再锁定进自己的 catalog。
 
 ## License
 
