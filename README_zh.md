@@ -43,6 +43,32 @@ HarborRL 支持 **Models × Algorithms × Tasks × Harnesses (MATH)** 的灵活�
 如果你希望让 AI agent 辅助完成本 repo 的部署和训练验证，请让它先阅读并严格遵循
 [docs/agents/environment-check.md](docs/agents/environment-check.md)。
 
+推荐的实际操作流程是把下面这段提示词交给 agent，并把方括号内容替换成你的拓扑：
+
+```text
+阅读 docs/agents/environment-check.md，并严格按该协议执行。
+目标：[仅 CPU 开发 | CPU rollout 与 GPU training 分离的原生部署]
+配置：[path/to/config.yaml，或 none]
+拓扑：[controller=..., rollout workers=[...], GPU machine=...]
+
+先只执行只读检查。返回协议要求的结构化报告，并告诉我能解决一个阻塞项的
+最小下一步命令。未经我明确同意，不要安装、下载、拉取镜像、挂载存储或启动
+服务。每次经我同意修改后，重新运行相关检查。原生部署最后执行 harborrl
+doctor 和 launch_native --dry-run。
+```
+
+你可以按以下清单确认部署是否正确：
+
+1. agent 报告一个验收等级：`cpu_development`、`deployment_preflight` 或
+   `training`；不得把 CPU-only 检查或 dry run 提升为更高等级。
+2. CPU 开发通过的标准是 `uv run harborrl --help` 和 `uv run pytest` 均成功。
+3. 原生部署通过的标准是所有可静态验证的 rollout worker、GPU 和跨机检查均为
+   `ready`；`harborrl doctor` 没有失败检查；`uv run harborrl train
+   path/to/config.yaml --dry-run` 能解析出 launch plan。
+4. 每个 `unknown` 项都必须说明推迟原因。训练前的 live gateway 和 task image
+   检查可以合理地保持为 deferred。
+5. agent 必须等待用户明确同意后才能启动真实训练。
+
 ## 快速开始
 
 完成[安装](#安装)后，从两种配置方式中选择一种：

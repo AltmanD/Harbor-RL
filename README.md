@@ -44,6 +44,36 @@ If you want an AI agent to help deploy this repository and verify training,
 ask it to first read and strictly follow
 [docs/agents/environment-check.md](docs/agents/environment-check.md).
 
+The practiced workflow is to give the agent this prompt, replacing the bracketed
+values with your topology:
+
+```text
+Read docs/agents/environment-check.md and follow it exactly.
+Target: [CPU development only | native split CPU-rollout/GPU-training deployment]
+Config: [path/to/config.yaml, or none]
+Topology: [controller=..., rollout workers=[...], GPU machine=...]
+
+First run read-only checks only. Return the required structured report and tell
+me the smallest next command that fixes one blocker. Do not install, download,
+pull an image, mount storage, or start a service without my explicit consent.
+After each approved change, rerun the relevant checks. Finish with harborrl
+doctor and launch_native --dry-run for a native deployment.
+```
+
+Confirm the result yourself against this checklist:
+
+1. The agent reports one acceptance level: `cpu_development`,
+   `deployment_preflight`, or `training`; it does not promote a CPU-only check
+   or dry run to a higher level.
+2. For CPU development, `uv run harborrl --help` and `uv run pytest` both pass.
+3. For native deployment, every statically verifiable rollout-worker, GPU, and
+   cross-machine check is `ready`; `harborrl doctor` has no failed checks; and
+   `uv run harborrl train path/to/config.yaml --dry-run` resolves the launch
+   plan.
+4. Every `unknown` item names what is deferred and why. Live gateway and
+   task-image checks can legitimately remain deferred before training.
+5. The agent waits for explicit consent before starting real training.
+
 ## Quick Start
 
 After [installation](#install), choose one of the two configuration styles:

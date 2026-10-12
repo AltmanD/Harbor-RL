@@ -5,6 +5,45 @@ deploy HarborRL and verify whether the user's machines can run training. Follow
 it before searching for unrelated instructions or improvising installation
 steps.
 
+## Practiced deployment workflow
+
+Use this workflow as the default unless the user supplies a stricter site
+process. It deliberately separates diagnosis, approved repair, and acceptance.
+
+1. Ask for or infer the target topology and config path. Run only read-only
+   checks until the user approves a change.
+2. Return the structured report from this protocol, including every confirmed
+   blocker and every `unknown` check. Do not replace the report with a prose-only
+   summary.
+3. Propose the smallest next command that removes one blocker. Stop and wait for
+   explicit user consent before installing, downloading, pulling, mounting, or
+   starting anything.
+4. After each approved change, rerun the affected phase and the repository
+   doctor. Never assume that a command succeeded.
+5. For native training, finish with a doctor run and launcher dry run. Report
+   static deployment as accepted only when both pass and every statically
+   verifiable machine check is `ready`. An unstarted live gateway remains an
+   explicit deferred item rather than a silent pass.
+6. Start real training only after the user confirms resource consumption and the
+   intended scope. A successful dry run is not permission to launch training.
+
+## Acceptance levels
+
+Use one of these levels in the final report so the user can tell whether the
+agent verified the target they actually chose:
+
+| Level | Meaning | Required evidence |
+| --- | --- | --- |
+| `cpu_development` | The controller can develop and test HarborRL | Phase 1 passes, `harborrl --help` works, repository tests pass |
+| `deployment_preflight` | The configured cross-machine deployment is statically ready | Every statically verifiable role and machine check passes, doctor reports no failed checks, and the CLI dry run resolves the plan |
+| `training` | A real training launch passed the user-selected smoke scope | Training artifacts or logs show the selected scope completed; list any explicitly deferred live checks separately |
+
+Do not label a CPU-only result as `deployment_preflight`. Do not label a dry run
+as `training`. Live-service checks may remain `unknown` only when they are not
+part of the selected acceptance level; they must still appear in `not_checked`.
+If evidence for the selected level is incomplete, its acceptance verdict is
+`unknown` even when individual installation checks pass.
+
 ## Objective
 
 Determine the readiness of each required machine role, report confirmed missing
@@ -245,6 +284,13 @@ Alternatively, use the native launcher wrapper:
 bash scripts/launch_native.sh --config path/to/config.yaml --doctor
 ```
 
+For `deployment_preflight` acceptance, also run the safe launcher dry run and
+retain its resolved plan as evidence:
+
+```bash
+uv run harborrl train path/to/config.yaml --dry-run
+```
+
 Requirements:
 
 - Parse the JSON object from stdout; do not rely only on the exit code.
@@ -265,9 +311,17 @@ End the diagnosis with a concise human summary followed by this JSON shape:
 ```json
 {
   "protocol": "harborrl/environment-check",
-  "protocol_version": 1,
+  "protocol_version": 2,
   "repo_commit": "string or null",
   "verdict": "ready | not_ready | unknown",
+  "acceptance": {
+    "level": "cpu_development | deployment_preflight | training",
+    "verdict": "ready | not_ready | unknown",
+    "evidence": [
+      "uv run harborrl --help exited 0",
+      "uv run pytest exited 0"
+    ]
+  },
   "roles": {
     "cpu_development": "ready | not_ready | unknown",
     "harbor_rollout_worker": "ready | not_ready | unknown",
@@ -310,3 +364,8 @@ omission in the human summary. A top-level `verdict` is `ready` only when every
 role required by the user's stated target is `ready`. Otherwise use
 `not_ready` when at least one required role has a confirmed blocker, or
 `unknown` when readiness cannot be established.
+
+The `acceptance.verdict` is scoped to the selected acceptance level. For
+example, `deployment_preflight` can be `ready` while the top-level verdict is
+`unknown` because a live gateway semantic probe is intentionally deferred; that
+deferred probe must remain visible in `not_checked`.
