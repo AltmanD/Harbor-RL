@@ -181,8 +181,12 @@ async def _run_slot(
     ]
     slots = GroupSlots(identities, max_attempts=int(os.environ["HARBORRL_NATIVE_MAX_ATTEMPTS"]))
     workers = json.loads(os.environ["HARBORRL_NATIVE_RUNNER_WORKERS"])
+    task_workers = json.loads(os.environ.get("HARBORRL_NATIVE_TASK_WORKER_OVERRIDES", "{}"))
     for attempt_index in range(slots.max_attempts):
         identity = slots.start(str(slot))
+        runner_host = task_workers.get(entry["id"])
+        if runner_host is None:
+            runner_host = workers[(slot + attempt_index) % len(workers)]
         root = runtime_.rollout_root / identity.group_id / identity.attempt_id
         try:
             async with runtime_.semaphore:
@@ -192,8 +196,7 @@ async def _run_slot(
                     profile=runtime_.profile,
                     gateway_url=os.environ["HARBORRL_NATIVE_GATEWAY_URL"],
                     runner_python=os.environ["HARBORRL_NATIVE_RUNNER_PYTHON"],
-                    # First attempts spread across workers by slot; a retry shifts to the next worker.
-                    runner_host=workers[(slot + attempt_index) % len(workers)],
+                    runner_host=runner_host,
                     root=root,
                     registry=runtime_.registry,
                     reward_profile=reward_profile,

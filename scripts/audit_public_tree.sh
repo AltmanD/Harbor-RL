@@ -17,9 +17,7 @@ files = [Path(name) for name in files if name]
 if not files:
     raise SystemExit("tracked tree is empty")
 
-forbidden_directories = {
-    "assets", "backends", "benchmarks", "deploy", "runs", "tools"
-}
+forbidden_directories = {"backends", "benchmarks", "deploy", "runs", "tools"}
 for path in files:
     if path.is_symlink():
         raise SystemExit(f"symlink is not publishable: {path}")

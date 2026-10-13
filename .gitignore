@@ -11,6 +11,7 @@ htmlcov/
 # Environments and editors
 .venv/
 venv/
+.venv-harbor-*/
 .env
 .envrc
 .DS_Store
@@ -28,5 +29,10 @@ wandb/
 # Local task caches and private launch configurations
 harbor_datasets/
 .backends/
+.tools/
+.worktrees/
+benchmarks/harbor/0.5-mvp/
+docs/
+local/
 configs/site/
 examples/**/private*
