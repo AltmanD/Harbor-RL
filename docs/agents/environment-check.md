@@ -108,7 +108,7 @@ git rev-parse HEAD
 git status --short
 uv --version
 uv lock --check
-uv sync --dev --dry-run
+uv sync --extra dev --dry-run
 ```
 
 Interpretation:
@@ -123,7 +123,7 @@ Interpretation:
 With user consent, create or update the locked environment and verify the CLI:
 
 ```bash
-uv sync --dev
+uv sync --extra dev
 uv run harborrl --help
 ```
 
