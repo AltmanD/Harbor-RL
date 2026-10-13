@@ -3,7 +3,7 @@
 HarborRL accepts changes through pull requests from a public branch.
 
 1. Fork or clone the repository and create a topic branch.
-2. Install with `uv sync --dev`.
+2. Install with `uv sync --extra dev`.
 3. Keep the public surface native-only; do not add vendored backends, private
    datasets, deployment credentials, or machine-specific defaults.
 4. Run `uv run pytest`, `uv run ruff check .`, and

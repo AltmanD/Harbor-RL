@@ -85,7 +85,7 @@ Use Python 3.10 or newer. Runtime dependencies, development dependencies, and th
 Install [uv](https://docs.astral.sh/uv/) 0.9 or newer, then synchronize the locked CPU development environment:
 
 ```bash
-uv sync --dev
+uv sync --extra dev
 ```
 
 Expected result: uv reads `uv.lock`, creates `.venv/`, and installs HarborRL with `pytest` and `ruff`. The command does not install CUDA kernels, Docker, model weights, Slime, Megatron-LM, or SGLang.

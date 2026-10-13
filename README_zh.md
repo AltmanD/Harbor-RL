@@ -80,7 +80,7 @@ doctor 和 launch_native --dry-run。
 安装 [uv](https://docs.astral.sh/uv/) 0.9 或更新版本，然后同步锁定的 CPU 开发环境：
 
 ```bash
-uv sync --dev
+uv sync --extra dev
 ```
 
 预期结果：uv 读取 `uv.lock`，创建 `.venv/`，并安装 HarborRL、`pytest` 和 `ruff`。该命令不会安装 CUDA kernel、Docker、模型权重、Slime、Megatron-LM 或 SGLang。
