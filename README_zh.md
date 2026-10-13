@@ -38,18 +38,20 @@ HarborRL 支持 **Models × Algorithms × Tasks × Harnesses (MATH)** 的灵活�
 - **Tasks：**在隔离 worker 中对 **200+** 个 Harbor 格式任务进行 RL 训练，包括 Terminal-Bench、SWE-Bench、Deep-SWE 等。
 - **Harnesses：**支持 **40+** 个 harness 框架进行 RL 训练，包括 Claude Code、Codex、LangGraph、SWE-agent 等。
 
-## Agent 辅助部署
+## AI 辅助配置
 
 如果你希望让 AI agent 辅助完成本 repo 的部署和训练验证，请让它先阅读并严格遵循
 [docs/agents/environment-check.md](docs/agents/environment-check.md)。
 
-推荐的实际操作流程是把下面这段提示词交给 agent，并把方括号内容替换成你的拓扑：
+推荐的实际操作流程是把下面这段提示词交给 agent，并把尖括号内容替换成你的机器信息：
 
 ```text
 阅读 docs/agents/environment-check.md，并严格按该协议执行。
 目标：[仅 CPU 开发 | CPU rollout 与 GPU training 分离的原生部署]
-配置：[path/to/config.yaml，或 none]
-拓扑：[controller=..., rollout workers=[...], GPU machine=...]
+配置：<Path to config.yaml>，或 none
+拓扑：controller=<Your IP address>:<Port Number>;
+  rollout workers=<Rollout worker IP address>:<Port Number>;
+  GPU machine=<GPU machine IP address>:<Port Number>
 
 先只执行只读检查。返回协议要求的结构化报告，并告诉我能解决一个阻塞项的
 最小下一步命令。未经我明确同意，不要安装、下载、拉取镜像、挂载存储或启动
@@ -64,32 +66,14 @@ doctor 和 launch_native --dry-run。
 2. CPU 开发通过的标准是 `uv run harborrl --help` 和 `uv run pytest` 均成功。
 3. 原生部署通过的标准是所有可静态验证的 rollout worker、GPU 和跨机检查均为
    `ready`；`harborrl doctor` 没有失败检查；`uv run harborrl train
-   path/to/config.yaml --dry-run` 能解析出 launch plan。
+   <Path to config.yaml> --dry-run` 能解析出 launch plan。
 4. 每个 `unknown` 项都必须说明推迟原因。训练前的 live gateway 和 task image
    检查可以合理地保持为 deferred。
 5. agent 必须等待用户明确同意后才能启动真实训练。
 
 ## 快速开始
 
-完成[安装](#安装)后，从两种配置方式中选择一种：
-
-```bash
-# 直接组合四个实验维度。
-harborrl train -model qwen3-8B -harness claude-code -task terminal-bench -alg grpo
-
-# 加载完整且可复现的实验定义。
-harborrl train config.yaml
-```
-
-如需让 YAML 启动过程自动感知并引导后端，请使用：
-
-```bash
-bash scripts/launch_native.sh --config config.yaml --backends /path/to/harborrl-backends
-```
-
-命令方式是基于当前目录 `config.yaml`（或通过 `--config` 选择的文件）的简写形式，用于选择四个实验维度。YAML 方式是完整的启动定义，还会固定 checkpoint、worker、serving 设置、GPU 拓扑、采样限制和输出位置。可以从[示例配置](examples/native/train_qwen_native.yaml)开始，并把站点专属文件保存在仓库外。
-
-## 安装
+### 安装
 
 使用 Python 3.10 或更新版本。Python 依赖、开发依赖和 `harborrl` 命令由 [pyproject.toml](pyproject.toml) 与 [uv.lock](uv.lock) 锁定。CPU 开发环境不需要 CUDA、Docker、模型权重、Slime、Megatron-LM 或 SGLang。
 
@@ -110,14 +94,34 @@ uv run pytest
 
 预期结果：uv 直接执行已安装的入口和测试，不需要手动激活虚拟环境。`train` 支持命令组合或 YAML 文件；`doctor` 用于校验 YAML 部署。
 
-使用 bash 安装固定版本的 native 训练栈：
+如需原生训练，请把固定版本的 native 训练栈安装到可写位置：
 
 ```bash
-bash scripts/bootstrap_backends.sh /path/to/harborrl-backends
-. /path/to/harborrl-backends/harborrl-backend.env
+bash scripts/bootstrap_backends.sh <Path to HarborRL backends>
+. <Path to HarborRL backends>/harborrl-backend.env
 ```
 
-## 运行配置与任务
+### 训练
+
+完成安装后，从两种配置方式中选择一种：
+
+```bash
+# 直接组合四个实验维度。
+uv run harborrl train -model qwen3-8B -harness claude-code -task terminal-bench -alg grpo
+
+# 加载完整且可复现的实验定义。
+uv run harborrl train <Path to config.yaml>
+```
+
+如需让 YAML 启动过程自动感知并引导后端，请使用：
+
+```bash
+bash scripts/launch_native.sh --config <Path to config.yaml> --backends <Path to HarborRL backends>
+```
+
+命令方式是基于当前目录 `config.yaml`（或通过 `--config` 选择的文件）的简写形式，用于选择四个实验维度。YAML 方式是完整的启动定义，还会固定 checkpoint、worker、serving 设置、GPU 拓扑、采样限制和输出位置。可以从[示例配置](examples/native/train_qwen_native.yaml)开始，并把站点专属文件保存在仓库外。
+
+## 任务配置
 
 训练由一个 YAML 文件配置，其 section 和字段集合固定。相对路径按 YAML 文件所在目录解析，可重复使用 `--set section.field=value` 覆盖并再次校验。请从 [examples/native/train_qwen_native.yaml](examples/native/train_qwen_native.yaml) 开始修改 site-specific 配置。
 

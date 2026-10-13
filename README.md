@@ -38,7 +38,7 @@ HarborRL supports flexible combinations of **Models × Algorithms × Tasks × Ha
 - **Tasks:** RL training on **200+** Harbor-format tasks in isolated workers, including Terminal-Bench, SWE-Bench, Deep-SWE, and more.
 - **Harnesses:** RL training with **40+** harness frameworks, including Claude Code, Codex, LangGraph, SWE-agent, and more.
 
-## Agent-Assisted Deployment
+## AI-assisted Configure
 
 If you want an AI agent to help deploy this repository and verify training,
 ask it to first read and strictly follow
@@ -50,8 +50,10 @@ values with your topology:
 ```text
 Read docs/agents/environment-check.md and follow it exactly.
 Target: [CPU development only | native split CPU-rollout/GPU-training deployment]
-Config: [path/to/config.yaml, or none]
-Topology: [controller=..., rollout workers=[...], GPU machine=...]
+Config: <Path to config.yaml>, or none
+Topology: controller=<Your IP address>:<Port Number>;
+  rollout workers=<Rollout worker IP address>:<Port Number>;
+  GPU machine=<GPU machine IP address>:<Port Number>
 
 First run read-only checks only. Return the required structured report and tell
 me the smallest next command that fixes one blocker. Do not install, download,
@@ -68,7 +70,7 @@ Confirm the result yourself against this checklist:
 2. For CPU development, `uv run harborrl --help` and `uv run pytest` both pass.
 3. For native deployment, every statically verifiable rollout-worker, GPU, and
    cross-machine check is `ready`; `harborrl doctor` has no failed checks; and
-   `uv run harborrl train path/to/config.yaml --dry-run` resolves the launch
+   `uv run harborrl train <Path to config.yaml> --dry-run` resolves the launch
    plan.
 4. Every `unknown` item names what is deferred and why. Live gateway and
    task-image checks can legitimately remain deferred before training.
@@ -76,25 +78,7 @@ Confirm the result yourself against this checklist:
 
 ## Quick Start
 
-After [installation](#install), choose one of the two configuration styles:
-
-```bash
-# Compose the four experiment dimensions.
-harborrl train -model qwen3-8B -harness claude-code -task terminal-bench -alg grpo
-
-# Load a complete, reproducible experiment definition.
-harborrl train config.yaml
-```
-
-For a bootstrap-aware YAML launch, use:
-
-```bash
-bash scripts/launch_native.sh --config config.yaml --backends /path/to/harborrl-backends
-```
-
-The command style is a shorthand over `config.yaml` in the working directory (or the file selected with `--config`) and selects the four experiment dimensions. The YAML style is the complete launch definition: it also pins checkpoints, workers, serving settings, GPU topology, sampling limits, and output locations. Start from [examples/native/train_qwen_native.yaml](examples/native/train_qwen_native.yaml) and keep site-specific files outside the repository.
-
-## Install
+### Install
 
 Use Python 3.10 or newer. Runtime dependencies, development dependencies, and the `harborrl` command are locked by [pyproject.toml](pyproject.toml) and [uv.lock](uv.lock). The CPU development install does not require CUDA, Docker, model weights, Slime, Megatron-LM, or SGLang.
 
@@ -115,14 +99,34 @@ uv run pytest
 
 Expected result: uv executes the installed entry point and tests without activating the virtual environment manually. `train` accepts command composition or a YAML file; `doctor` validates a YAML deployment.
 
-Install the pinned native training stack with bash:
+For native training, install the pinned backend stack in a writable location:
 
 ```bash
-bash scripts/bootstrap_backends.sh /path/to/harborrl-backends
-. /path/to/harborrl-backends/harborrl-backend.env
+bash scripts/bootstrap_backends.sh <Path to HarborRL backends>
+. <Path to HarborRL backends>/harborrl-backend.env
 ```
 
-## Configuration and tasks
+### Train
+
+After installation, choose one of the two configuration styles:
+
+```bash
+# Compose the four experiment dimensions.
+uv run harborrl train -model qwen3-8B -harness claude-code -task terminal-bench -alg grpo
+
+# Load a complete, reproducible experiment definition.
+uv run harborrl train <Path to config.yaml>
+```
+
+For a bootstrap-aware YAML launch, use:
+
+```bash
+bash scripts/launch_native.sh --config <Path to config.yaml> --backends <Path to HarborRL backends>
+```
+
+The command style is a shorthand over `config.yaml` in the working directory (or the file selected with `--config`) and selects the four experiment dimensions. The YAML style is the complete launch definition: it also pins checkpoints, workers, serving settings, GPU topology, sampling limits, and output locations. Start from [examples/native/train_qwen_native.yaml](examples/native/train_qwen_native.yaml) and keep site-specific files outside the repository.
+
+## Task Configuration
 
 Training is configured with one YAML file that has a fixed section and field set. Relative paths resolve against the YAML file, and repeated `--set section.field=value` overrides are parsed as YAML values and validated again. Start site-specific configurations from [examples/native/train_qwen_native.yaml](examples/native/train_qwen_native.yaml).
 
